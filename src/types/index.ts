@@ -1,8 +1,12 @@
-export type SampleCategory = "kicks" | "snares" | "hats" | "bass" | "melody";
+export type SampleCategory = "kick" | "snare" | "hat" | "clap" | "perc" | "bass" | "guitar" | "melody" | "other";
+
+export type SampleType = "oneshot" | "loop";
 
 export type Sample = {
   id: string;
+  filename: string;
   name: string;
+  type: SampleType;
   category: SampleCategory;
   path: string;
 };

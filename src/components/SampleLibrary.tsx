@@ -9,7 +9,7 @@ export default function SampleLibrary({ samples, onPreview, onAssign }: Props) {
       <div className="sample-list">
         {samples.map((sample) => (
           <article className="sample-row" key={sample.id}>
-            <div><strong>{sample.name}</strong><small>{sample.category} · {sample.path}</small></div>
+            <div><strong>{sample.name}</strong><small>{sample.type} · {sample.category} · {sample.filename} · {sample.path}</small></div>
             <button onClick={() => onPreview(sample)}>Preview</button>
             <button onClick={() => onAssign(sample)}>Assign</button>
           </article>

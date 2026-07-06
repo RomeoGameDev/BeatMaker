@@ -6,7 +6,7 @@ Dusty Workstation is a beginner-friendly browser music workstation MVP inspired 
 
 - Retro dark Next.js + TypeScript app shell.
 - Top toolbar with Play, Stop, BPM, skin selector, and status text.
-- Hardcoded sample library for kicks, snares, hats, bass, and melody.
+- Build-time sample discovery for one-shots and loops with filename-based categorization.
 - Tone.js sample preview with friendly status messages if files are missing.
 - Four-track, 16-step sequencer with clickable steps and current-step highlighting.
 - Three CSS-variable skins: Dusty Purple, Winamp Classic Inspired, and Green CRT.
@@ -34,17 +34,15 @@ npm run build
 
 ## Where to put samples
 
-Create these folders under `public/` and add your WAV files:
+Create folders under `public/samples/` and add supported audio files (`.wav`, `.mp3`, `.aif`, `.aiff`, `.flac`, `.ogg`, or `.m4a`). The scanner preserves the original filename, so any filename is allowed as long as it uses a supported audio extension.
 
 ```text
-public/samples/kicks/kick01.wav
-public/samples/snares/snare01.wav
-public/samples/hats/hat01.wav
-public/samples/bass/bass01.wav
-public/samples/melody/melody01.wav
+public/samples/oneshots/Kick23.WAV
+public/samples/oneshots/dirty_snare_02.wav
+public/samples/loops/melodic_loop_90bpm.mp3
 ```
 
-The app still loads if the files are not there. Preview or sequencer playback will show an error/status message until the sample files are added.
+Samples in folders with `loop` in the path are marked as loops; all others are marked as one-shots. Categories are guessed from lowercase filename matches such as `kick`, `snare`, `hat`/`hihat`, `clap`, `perc`, `bass`, `guitar`, `melody`/`melodic`/`loop`, or `other`. The app still loads if files are not there. Preview or sequencer playback will show an error/status message until sample files are added.
 
 ## What to test first
 
@@ -55,7 +53,7 @@ The app still loads if the files are not there. Preview or sequencer playback wi
 5. Press Play and Stop.
 6. Change the BPM.
 7. Switch between the three skins.
-8. Add WAV files to `public/samples/...` and try Preview.
+8. Add supported audio files to `public/samples/...` and try Preview.
 
 ## Planned next
 
