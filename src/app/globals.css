@@ -108,3 +108,9 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .piano-key.black { height:3.6rem; min-width:1.8rem; background:linear-gradient(#27202f,#050507); color:#eee; margin-left:-.6rem; margin-right:-.6rem; z-index:2; }
 .piano-key.selected { outline:2px solid #fff56a; box-shadow:0 0 14px #a855f7; color:#fff56a; }
 .chord-selected { margin:.4rem 0; color:var(--color-accent); }
+.arrangement-panel h3 { margin:.1rem 0; color:var(--color-accent); }
+.arrangement-timeline { display:grid; grid-template-columns:repeat(8, minmax(3.8rem, 1fr)); gap:.45rem; margin-top:.75rem; }
+.arrangement-slot { min-height:3.5rem; display:grid; place-items:center; background:#08080c; }
+.arrangement-slot.filled { background:linear-gradient(135deg, color-mix(in srgb, var(--color-accent), black 45%), color-mix(in srgb, var(--color-accent-2, var(--color-accent)), black 58%)); color:var(--color-text); box-shadow:0 0 12px color-mix(in srgb, var(--color-accent), transparent 65%); }
+.arrangement-slot small { opacity:.72; margin:0; }
+.waveform-modes button { min-width:6rem; }

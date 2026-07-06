@@ -1,37 +1,14 @@
 import type { Skin } from "@/types";
 
 export const skins: Skin[] = [
-  {
-    id: "dusty-purple",
-    name: "Dusty Purple",
-    variables: {
-      "--color-bg": "#151020",
-      "--color-panel": "#241832",
-      "--color-text": "#f4eaff",
-      "--color-accent": "#c77dff",
-      "--color-border": "#6f4a8e",
-    },
-  },
-  {
-    id: "winamp-classic-inspired",
-    name: "Winamp Classic Inspired",
-    variables: {
-      "--color-bg": "#161922",
-      "--color-panel": "#252a36",
-      "--color-text": "#e6edf3",
-      "--color-accent": "#ffb000",
-      "--color-border": "#6b7280",
-    },
-  },
-  {
-    id: "green-crt",
-    name: "Green CRT",
-    variables: {
-      "--color-bg": "#061006",
-      "--color-panel": "#0b1c0b",
-      "--color-text": "#d7ffd7",
-      "--color-accent": "#39ff14",
-      "--color-border": "#1f7a1f",
-    },
-  },
+  { id: "dusty-purple", name: "Dusty Purple", variables: { "--color-bg": "#151020", "--color-panel": "#241832", "--color-text": "#f4eaff", "--color-muted": "#cbb6dd", "--color-accent": "#c77dff", "--color-accent-2": "#7dd3fc", "--color-border": "#6f4a8e", "--color-waveform-original": "#2dd4ff", "--color-waveform-processed": "#facc15" } },
+  { id: "winamp-classic-inspired", name: "Winamp Classic Inspired", variables: { "--color-bg": "#161922", "--color-panel": "#252a36", "--color-text": "#e6edf3", "--color-muted": "#b6bfcc", "--color-accent": "#ffb000", "--color-accent-2": "#39a0ff", "--color-border": "#6b7280", "--color-waveform-original": "#39a0ff", "--color-waveform-processed": "#ffb000" } },
+  { id: "green-crt", name: "Green CRT", variables: { "--color-bg": "#061006", "--color-panel": "#0b1c0b", "--color-text": "#d7ffd7", "--color-muted": "#9fd49f", "--color-accent": "#39ff14", "--color-accent-2": "#00ffd5", "--color-border": "#1f7a1f", "--color-waveform-original": "#00ffd5", "--color-waveform-processed": "#dfff00" } },
+  { id: "acid-green", name: "Acid Green", variables: { "--color-bg": "#071005", "--color-panel": "#13200d", "--color-text": "#efffe8", "--color-muted": "#b7d8ad", "--color-accent": "#b6ff00", "--color-accent-2": "#00ffa8", "--color-border": "#6ea000", "--color-waveform-original": "#00ffa8", "--color-waveform-processed": "#fff000" } },
+  { id: "amber-terminal", name: "Amber Terminal", variables: { "--color-bg": "#120b02", "--color-panel": "#221404", "--color-text": "#ffe6b0", "--color-muted": "#d4a95f", "--color-accent": "#ffb02e", "--color-accent-2": "#ffd166", "--color-border": "#8a5a16", "--color-waveform-original": "#48cae4", "--color-waveform-processed": "#ffd166" } },
+  { id: "blue-steel", name: "Blue Steel", variables: { "--color-bg": "#07111f", "--color-panel": "#152235", "--color-text": "#e8f1ff", "--color-muted": "#9fb2c9", "--color-accent": "#6ca6ff", "--color-accent-2": "#9bd8ff", "--color-border": "#47617e", "--color-waveform-original": "#9bd8ff", "--color-waveform-processed": "#ffd166" } },
+  { id: "hot-pink-tracker", name: "Hot Pink Tracker", variables: { "--color-bg": "#160616", "--color-panel": "#2a0d2a", "--color-text": "#ffe8fb", "--color-muted": "#e2a9d7", "--color-accent": "#ff4fd8", "--color-accent-2": "#00f5ff", "--color-border": "#a02b86", "--color-waveform-original": "#00f5ff", "--color-waveform-processed": "#ffe45e" } },
+  { id: "grey-reaper", name: "Grey Reaper-ish", variables: { "--color-bg": "#101112", "--color-panel": "#25272a", "--color-text": "#eeeeee", "--color-muted": "#b8b8b8", "--color-accent": "#f28c28", "--color-accent-2": "#8ab4f8", "--color-border": "#575b61", "--color-waveform-original": "#8ab4f8", "--color-waveform-processed": "#f6c45d" } },
+  { id: "cyber-yellow", name: "Cyber Yellow", variables: { "--color-bg": "#080907", "--color-panel": "#1c1d10", "--color-text": "#fffde1", "--color-muted": "#d1cc83", "--color-accent": "#fff000", "--color-accent-2": "#00e5ff", "--color-border": "#8f8a18", "--color-waveform-original": "#00e5ff", "--color-waveform-processed": "#fff000" } },
+  { id: "midnight-red", name: "Midnight Red", variables: { "--color-bg": "#10070a", "--color-panel": "#241014", "--color-text": "#ffe9ec", "--color-muted": "#d3a1aa", "--color-accent": "#ff3b4f", "--color-accent-2": "#8ecae6", "--color-border": "#7a2630", "--color-waveform-original": "#8ecae6", "--color-waveform-processed": "#ffd166" } }
 ];

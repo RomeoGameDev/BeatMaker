@@ -28,7 +28,11 @@ export type Skin = {
     "--color-panel": string;
     "--color-text": string;
     "--color-accent": string;
+    "--color-accent-2"?: string;
     "--color-border": string;
+    "--color-muted"?: string;
+    "--color-waveform-original"?: string;
+    "--color-waveform-processed"?: string;
   };
 };
 
@@ -46,7 +50,7 @@ export type TrackSettings = {
 };
 
 export type FadeCurve = "linear" | "easeIn" | "easeOut" | "exponential";
-export type TrackEffectType = "eq" | "reverb" | "overdrive" | "distortion" | "compressor";
+export type TrackEffectType = "eq" | "reverb" | "overdrive" | "distortion" | "compressor" | "delay" | "chorus" | "bitcrusher" | "filter" | "limiter" | "noiseGate";
 export type EqBand = { label: string; frequencyHz: number; gainDb: number; q: number; };
 export type TrackEffect = { id: string; type: TrackEffectType; name: string; enabled: boolean; params: Record<string, unknown>; };
 
@@ -63,3 +67,6 @@ export type SequencerTrack = {
   maxNote?: string;
   effects: TrackEffect[];
 };
+
+export type PatternId = "A" | "B" | "C" | "D";
+export type ArrangementSlot = PatternId | "";
