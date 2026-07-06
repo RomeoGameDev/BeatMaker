@@ -7,6 +7,8 @@ export type TrackMode = "oneshot" | "keyboard";
 export type SequencerStep = {
   active: boolean;
   note?: string;
+  chord?: string;
+  notes?: string[];
 };
 
 export type Sample = {

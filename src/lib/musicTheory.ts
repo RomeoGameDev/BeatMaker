@@ -1,6 +1,32 @@
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 
 export const CHROMATIC_NOTES = [...NOTE_NAMES];
+export const CHORD_TYPES = ["major", "minor", "diminished", "augmented", "sus2", "sus4", "major7", "minor7", "dominant7"] as const;
+export type ChordType = (typeof CHORD_TYPES)[number];
+
+const CHORD_INTERVALS: Record<ChordType, number[]> = {
+  major: [0, 4, 7],
+  minor: [0, 3, 7],
+  diminished: [0, 3, 6],
+  augmented: [0, 4, 8],
+  sus2: [0, 2, 7],
+  sus4: [0, 5, 7],
+  major7: [0, 4, 7, 11],
+  minor7: [0, 3, 7, 10],
+  dominant7: [0, 4, 7, 10]
+};
+
+const CHORD_LABELS: Record<ChordType, string> = {
+  major: "maj",
+  minor: "m",
+  diminished: "dim",
+  augmented: "aug",
+  sus2: "sus2",
+  sus4: "sus4",
+  major7: "maj7",
+  minor7: "m7",
+  dominant7: "7"
+};
 
 export function noteToMidi(note: string): number {
   const match = /^([A-G]#?)(-?\d+)$/.exec(note.trim());
@@ -18,8 +44,18 @@ export function midiToNote(midi: number): string {
   return `${noteName}${octave}`;
 }
 
-export function semitoneDiff(fromNote: string, toNote: string): number {
-  return noteToMidi(toNote) - noteToMidi(fromNote);
+export function semitoneDiff(fromNote: string, toNote: string): number { return noteToMidi(toNote) - noteToMidi(fromNote); }
+
+export function buildChord(rootNote: string, chordType: string): string[] {
+  const safeType = (CHORD_TYPES as readonly string[]).includes(chordType) ? chordType as ChordType : "major";
+  const rootMidi = noteToMidi(rootNote);
+  return CHORD_INTERVALS[safeType].map((interval) => midiToNote(rootMidi + interval));
+}
+
+export function formatChordLabel(rootNote: string, chordType: string): string {
+  const safeType = (CHORD_TYPES as readonly string[]).includes(chordType) ? chordType as ChordType : "major";
+  const rootName = rootNote.replace(/-?\d+$/, "");
+  return `${rootName}${CHORD_LABELS[safeType]}`;
 }
 
 export function buildNoteRange(rootNote: string, octaveRange: number): string[] {
@@ -30,8 +66,6 @@ export function buildNoteRange(rootNote: string, octaveRange: number): string[] 
 
 export function noteOptions(fromOctave = 1, toOctave = 6): string[] {
   const notes: string[] = [];
-  for (let octave = fromOctave; octave <= toOctave; octave += 1) {
-    NOTE_NAMES.forEach((name) => notes.push(`${name}${octave}`));
-  }
+  for (let octave = fromOctave; octave <= toOctave; octave += 1) NOTE_NAMES.forEach((name) => notes.push(`${name}${octave}`));
   return notes;
 }
