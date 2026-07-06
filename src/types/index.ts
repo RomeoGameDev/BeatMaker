@@ -40,6 +40,7 @@ export type Skin = {
     "--panel-gradient"?: string;
     "--titlebar-gradient"?: string;
     "--button-gradient"?: string;
+    "--app-background"?: string;
     "--panel-shadow"?: string;
   };
 };
