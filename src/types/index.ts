@@ -68,5 +68,5 @@ export type SequencerTrack = {
   effects: TrackEffect[];
 };
 
-export type PatternId = "A" | "B" | "C" | "D";
+export type PatternId = string;
 export type ArrangementSlot = PatternId | "";
