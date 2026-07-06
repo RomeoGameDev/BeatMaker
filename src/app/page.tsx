@@ -69,13 +69,7 @@ export default function Home() {
     setStatus("Stopped.");
   }
 
-  const themeStyle = {
-    "--bg": selectedSkin.variables.background,
-    "--panel-bg": selectedSkin.variables.panelBackground,
-    "--text": selectedSkin.variables.textColor,
-    "--accent": selectedSkin.variables.accentColor,
-    "--border": selectedSkin.variables.borderColor
-  } as CSSProperties;
+  const themeStyle = selectedSkin.variables as CSSProperties;
 
   return (
     <main className="app-shell" style={themeStyle}>
