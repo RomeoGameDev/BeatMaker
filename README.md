@@ -94,8 +94,9 @@ Drag-and-drop window movement is intentionally not implemented yet, so the layou
 - Safer sequencer scheduling with a single active Tone.Transport scheduler at a time.
 - Per-track sample controls for start offset, end trim, fade in, fade out, volume, mute, solo, pitch playback rate, reset settings, clear notes, clear pattern, and reset track.
 - Window-like panels for Sample Library, Step Sequencer, Track Controls, Arrangement, Waveform/Slicer, Export, and Guitar Tools.
-- Three CSS-variable skins: Dusty Purple, Winamp Classic Inspired, and Green CRT.
-- Real browser-decoded waveform display for assigned samples, plus placeholder arrangement, export, and guitar tools panels.
+- Ten CSS-variable skins: Dusty Purple, Winamp Classic Inspired, Green CRT, Acid Green, Amber Terminal, Blue Steel, Hot Pink Tracker, Grey Reaper-ish, Cyber Yellow, and Midnight Red.
+- Real browser-decoded waveform display for assigned samples and independent Sample Editor original/processed waveform comparison.
+- Basic pattern arrangement with Patterns A-D, duplicate/clear pattern actions, 16 timeline slots, and simple arrangement playback.
 
 ## Planned next
 
@@ -127,17 +128,17 @@ If a keyboard step is active but has no note, it plays the track root note. Pitc
 
 ## Sample Editor
 
-The Sample Editor panel edits the same selected track sample playback settings as Track Controls. It fetches the assigned sample in the browser, decodes it with AudioContext, draws a real purple canvas waveform, and overlays markers for start offset, end trim, fade in, and fade out. If a file cannot be fetched or decoded, the panel shows a friendly message instead of crashing.
+The Sample Editor panel is now independent from Track Controls. It fetches the assigned sample in the browser, decodes it with AudioContext, draws a real purple canvas waveform, and overlays markers for start offset, end trim, fade in, and fade out. If a file cannot be fetched or decoded, the panel shows a friendly message instead of crashing.
 
 ### How to align a late sample
 
 1. Select the track that has the late sample assigned.
 2. Open Sample Editor and use the real waveform to find where the useful transient begins.
 3. Move **Start Offset** with the slider or the **Start -1 ms / +1 ms / -10 ms / +10 ms** nudge buttons until the marker lines up with the transient.
-4. Click **Preview Sample** to hear the current trim and fade settings.
+4. Click **Preview Edited** to hear the current trim, fade, gain, and pitch settings.
 5. Adjust **Fade In** and **Fade Out** if the trimmed sample clicks or needs a softer edge.
 
-Real silence trimming, transient detection, upload, effects, and export are intentionally left for later.
+Use **Preview Original** to compare against the untouched source. Switch waveform mode between **Original**, **Processed**, and **Overlay**. **Download Edited WAV** creates a browser download named like `originalname_edited.wav`; it does not write directly to `public/samples` or any server folder. Real silence trimming, transient detection, upload, and editor FX are intentionally left for later.
 
 
 ## Track management and reset controls
@@ -177,12 +178,12 @@ Available curve shapes are `linear`, `easeIn`, `easeOut`, and `exponential`. Ton
 
 Each track now has a simple Reaper-inspired FX chain. You can:
 
-- Add EQ, Reverb, Overdrive, Distortion, or Compressor.
+- Add EQ, Reverb, Overdrive, Distortion, Compressor, Delay, Chorus, Bitcrusher, Filter, Limiter, or Noise Gate.
 - Add the same effect more than once.
 - Enable/bypass each effect instance.
 - Edit each instance independently.
-- Duplicate, remove, move up, and move down modules.
-- Bypass all FX or remove all FX.
+- Reset, duplicate, remove, move up, and move down modules.
+- Bypass all FX, reset all FX params, or remove all FX.
 
 The audio engine attempts safe per-hit routing for enabled FX and falls back to dry playback if an FX node or chain fails, so the sequencer should keep running.
 
@@ -193,8 +194,14 @@ The audio engine attempts safe per-hit routing for enabled FX and falls back to 
 - **Overdrive**: drive, tone, and wet using a simple distortion + tone filter approach.
 - **Distortion**: amount and wet.
 - **Compressor**: threshold, ratio, attack, release, and optional makeup gain.
+- **Delay**: wet, delay time, and feedback.
+- **Chorus**: wet, modulation frequency, delay time, and depth.
+- **Bitcrusher**: bits and wet UI. Tone 15 does not expose direct wet on the BitCrusher node yet, so playback currently applies the crusher itself and keeps a TODO for dry/wet routing.
+- **Filter**: lowpass, highpass, or bandpass with frequency, Q, and gain.
+- **Limiter**: threshold.
+- **Noise Gate**: threshold, attack, and release UI with a safe Tone.js compressor-based approximation for now.
 
-These are intentionally simple MVP effects, not final mastering-grade plugins.
+Each effect has a per-instance **Reset** button powered by `getDefaultEffectParams(effectType)`. These are intentionally simple MVP effects, not final mastering-grade plugins.
 
 ### Clickable Chord Composer
 
@@ -217,3 +224,43 @@ Preset buttons are available for Major, Minor, Sus2, Sus4, Maj7, Min7, and Dom7 
 - Custom fade curve audio automation is planned later; curve shapes are currently visual while Tone.Player uses simple fade values.
 - Export WAV and stems ZIP are not implemented yet.
 - Full piano roll editing is not implemented yet.
+
+
+## Basic Arrangement workflow
+
+- Use the Pattern selector in the Arrangement panel to switch between Patterns **A**, **B**, **C**, and **D**.
+- The Step Sequencer edits the currently selected pattern.
+- **Duplicate current to** copies the current pattern steps into another pattern.
+- **Clear Pattern** empties the active pattern without changing samples, FX, or track controls.
+- The 16 timeline slots can be clicked to cycle through Empty, A, B, C, and D.
+- **Play Arrangement** plays non-empty slots from left to right, one 16-step pattern cycle per slot. Normal toolbar **Play** still plays only the current pattern.
+
+## Current theme list
+
+- Dusty Purple
+- Winamp Classic Inspired
+- Green CRT
+- Acid Green
+- Amber Terminal
+- Blue Steel
+- Hot Pink Tracker
+- Grey Reaper-ish
+- Cyber Yellow
+- Midnight Red
+
+## Manual test plan for this pass
+
+1. Run `npm install`.
+2. Run `npm run dev`.
+3. Open the app in the browser.
+4. FX: add Delay, change params, click Reset, duplicate Delay, remove one instance, add Bitcrusher/Filter/Limiter, and confirm playback does not crash.
+5. Sample Editor: choose a kick sample, Preview Original, change start/fade/gain, Preview Edited, switch Original/Processed/Overlay, and Download Edited WAV.
+6. Themes: switch through every skin and confirm controls remain readable.
+7. Arrangement: switch Pattern A/B/C/D, create different steps, duplicate a pattern, fill timeline slots, try Play Arrangement, then confirm normal Play still works.
+
+## Known limitations added in this pass
+
+- Edited sample download is browser-only and does not save directly to the server sample folder.
+- Processed waveform pitch rendering is approximate/TODO; trim, fade, and gain are represented visually.
+- Editor FX are not implemented yet.
+- Bitcrusher wet mix and Noise Gate audio are safe MVP approximations around Tone.js limitations.
