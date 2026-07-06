@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Sample, SampleCategory, SampleType } from "@/types";
 
 const SAMPLE_ROOT = path.join(process.cwd(), "public", "samples");
-const SUPPORTED_AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".aif", ".aiff", ".flac", ".ogg", ".m4a"]);
+const SUPPORTED_AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".ogg", ".flac"]);
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

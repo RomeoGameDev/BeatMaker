@@ -23,9 +23,21 @@ export type Skin = {
   };
 };
 
+export type TrackSettings = {
+  startOffsetMs: number;
+  endTrimMs: number;
+  fadeInMs: number;
+  fadeOutMs: number;
+  volume: number;
+  mute: boolean;
+  solo: boolean;
+  pitchSemitones: number;
+};
+
 export type SequencerTrack = {
   id: number;
   name: string;
   assignedSample?: Sample;
   steps: boolean[];
+  settings: TrackSettings;
 };
