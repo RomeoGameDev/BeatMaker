@@ -11,7 +11,8 @@ import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import WaveformPanel from "@/components/WaveformPanel";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
-import { setBpm, startAudio, stopTransport, Tone, playSample, triggerOneShot } from "@/lib/audioEngine";
+import { setBpm, startAudio, stopTransport, Tone, playSample, triggerSample } from "@/lib/audioEngine";
+import { semitoneDiff } from "@/lib/musicTheory";
 import { skins } from "@/lib/skins";
 import type { Sample, SequencerTrack, TrackSettings } from "@/types";
 
@@ -23,7 +24,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   const [status, setStatus] = useState("Ready. Add samples to public/samples to hear audio.");
   const [selectedSkinId, setSelectedSkinId] = useState(skins[0].id);
   const [selectedTrackId, setSelectedTrackId] = useState(1);
-  const [selectedSample, setSelectedSample] = useState<Sample | undefined>(samples[0]);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | undefined>(undefined);
   const [tracks, setTracks] = useState<SequencerTrack[]>(() => makeInitialTracks(samples[0]));
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -39,22 +40,35 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   useEffect(() => () => disposeSequencer(), []);
 
   function assignSample(sample: Sample) {
-    setSelectedSample(sample);
     setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: sample } : track));
     setStatus(`${sample.name} assigned to Track ${selectedTrackId}.`);
   }
 
   function toggleStep(trackId: number, stepIndex: number) {
-    setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((isOn, index) => index === stepIndex ? !isOn : isOn) } : track));
+    setSelectedTrackId(trackId);
+    setSelectedStepIndex(stepIndex);
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((step, index) => index === stepIndex ? { ...step, active: !step.active } : step) } : track));
+  }
+
+  function selectTrack(trackId: number) {
+    setSelectedTrackId(trackId);
+    setSelectedStepIndex(undefined);
   }
 
   function updateTrackSettings(trackId: number, settings: Partial<TrackSettings>) {
     setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, settings: { ...track.settings, ...settings } } : track));
   }
 
+  function updateTrack(trackId: number, updates: Partial<Pick<SequencerTrack, "mode" | "rootNote" | "octaveRange">>) {
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, ...updates } : track));
+  }
+
+  function updateStepNote(trackId: number, stepIndex: number, note: string) {
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((step, index) => index === stepIndex ? { ...step, active: true, note } : step) } : track));
+  }
+
   async function previewSample(sample: Sample) {
     const result = await playSample(sample);
-    setSelectedSample(sample);
     setStatus(result.ok ? `Previewing ${sample.name}.` : result.message);
   }
 
@@ -64,7 +78,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
       return;
     }
 
-    const result = await triggerOneShot(track.assignedSample, track.settings, Tone.now());
+    const result = await triggerSample(track.assignedSample, track.settings, Tone.now());
     setStatus(result.ok ? "Playing." : result.message);
   }
 
@@ -72,11 +86,11 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
     const activeTracks = tracksRef.current;
     const hasSolo = activeTracks.some((track) => track.settings.solo);
     activeTracks.forEach((track) => {
-      if (!track.steps[step] || !track.assignedSample || track.settings.mute) return;
+      const stepData = track.steps[step];
+      if (!stepData?.active || !track.assignedSample || track.settings.mute) return;
       if (hasSolo && !track.settings.solo) return;
-      // One Tone scheduler calls this function once per 16th note, so each active
-      // track/step gets exactly one player.start(time, ...) call per cycle.
-      void triggerOneShot(track.assignedSample, track.settings, time);
+      const pitchSemitones = track.mode === "keyboard" ? track.settings.pitchSemitones + semitoneDiff(track.rootNote, stepData.note ?? track.rootNote) : track.settings.pitchSemitones;
+      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time);
     });
   }
 
@@ -126,10 +140,10 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
       <div className="workspace-grid">
         <WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel>
-        <WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} currentStep={currentStep} selectedTrackId={selectedTrackId} onToggleStep={toggleStep} onSelectTrack={setSelectedTrackId} /></WindowPanel>
-        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} onChange={updateTrackSettings} onPreview={previewTrack} /></WindowPanel>
+        <WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} /></WindowPanel>
+        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} onStepNoteChange={updateStepNote} onPreview={previewTrack} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel /></WindowPanel>
-        <WindowPanel title="Waveform / Slicer" state={panels.waveform} onStateChange={(state) => setPanelState("waveform", state)}><WaveformPanel sample={selectedSample} /></WindowPanel>
+        <WindowPanel title="Sample Editor" state={panels.waveform} onStateChange={(state) => setPanelState("waveform", state)}><WaveformPanel track={selectedTrack} onChange={updateTrackSettings} onPreview={previewTrack} /></WindowPanel>
         <WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} /></WindowPanel>
         <WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools /></WindowPanel>
       </div>

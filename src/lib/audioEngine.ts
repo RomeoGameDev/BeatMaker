@@ -64,7 +64,7 @@ export async function playSample(sample: Sample) {
   }, Tone.now());
 }
 
-export async function triggerOneShot(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now()): Promise<OneShotResult> {
+export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now()): Promise<OneShotResult> {
   if (!sample?.path) {
     const result = oneShotResult(false, "missing", "Sample file missing or unsupported.");
     console.warn(result.message, { sample });
@@ -134,3 +134,5 @@ export function stopTransport() {
 }
 
 export { Tone };
+
+export const triggerOneShot = triggerSample;
