@@ -15,6 +15,16 @@ Open the local address printed by Next.js. For a production/type check, run:
 npm run build
 ```
 
+## Themes and skins
+
+The Skin selector includes the existing built-in themes plus three CSS-only themes inspired by classic Windows UI eras:
+
+- **Aero Glass** — Vista-era glass inspiration with translucent blue/purple panels, glossy gradients, cyan accents, cyan/blue original waveforms, and warm gold processed waveforms.
+- **XP Royale** — cleaner XP/Royale inspiration with bright blue title bars, cream panel surfaces, rounded controls, royal-blue accents, green secondary accents, blue original waveforms, and orange processed waveforms.
+- **Seven Glass** — Windows 7 Aero inspiration with darker blue/grey glass panels, restrained gradients, clean borders, sky-blue accents, light-blue original waveforms, and amber processed waveforms.
+
+These skins are visual homages only. They do not use Microsoft logos, wallpapers, icons, or external image assets; the look is built from CSS variables, gradients, borders, transparency, and shadows. Switching skins updates the whole app instantly without a reload.
+
 ## Samples
 
 Automatic sample discovery scans these folders at build/server-render time:

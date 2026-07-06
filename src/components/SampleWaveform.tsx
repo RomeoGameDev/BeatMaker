@@ -83,11 +83,11 @@ export default function SampleWaveform({ sample, settings, playheadMs, processed
     if (!canvas || waveform.status !== "ready") return;
     const context = canvas.getContext("2d"); if (!context) return;
     const width = canvas.clientWidth * window.devicePixelRatio; const height = canvas.clientHeight * window.devicePixelRatio;
-    canvas.width = width; canvas.height = height; context.clearRect(0, 0, width, height); context.fillStyle = "#050507"; context.fillRect(0, 0, width, height);
+    const styles = getComputedStyle(canvas);
+    canvas.width = width; canvas.height = height; context.clearRect(0, 0, width, height); context.fillStyle = styles.getPropertyValue("--color-panel-2").trim() || "#050507"; context.fillRect(0, 0, width, height);
     context.strokeStyle = "rgba(255,255,255,.18)"; context.beginPath(); context.moveTo(0, height / 2); context.lineTo(width, height / 2); context.stroke();
     const processedPeaks = processPeaks(waveform.peaks, waveform.durationMs, settings);
     const draw = (peaks: Peak[], color: string, alpha: number) => { const barWidth = width / peaks.length; context.globalAlpha = alpha; context.fillStyle = color; peaks.forEach((peak, index) => { const x = index * barWidth; const y = height / 2 + peak.min * height * 0.43; const barHeight = Math.max(1, (peak.max - peak.min) * height * 0.43); context.fillRect(x, y, Math.max(1, barWidth - 1), barHeight); }); context.globalAlpha = 1; };
-    const styles = getComputedStyle(canvas);
     const original = styles.getPropertyValue("--color-waveform-original").trim() || "#2dd4ff";
     const edited = styles.getPropertyValue("--color-waveform-processed").trim() || "#facc15";
     if (processed && mode === "overlay") { draw(waveform.peaks, original, .55); draw(processedPeaks, edited, .72); }
