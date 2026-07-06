@@ -3,6 +3,34 @@ import type { Sample, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
 
+type OneShotStatus =
+  | "playing"
+  | "missing"
+  | "not-loaded"
+  | "start-after-end"
+  | "invalid-duration"
+  | "error";
+
+export type OneShotResult = {
+  ok: boolean;
+  status: OneShotStatus;
+  message: string;
+};
+
+const oneShotResult = (ok: boolean, status: OneShotStatus, message: string): OneShotResult => ({ ok, status, message });
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+
+function sanitizeSettings(settings: TrackSettings) {
+  return {
+    startOffsetMs: clamp(settings.startOffsetMs, 0, Number.MAX_SAFE_INTEGER),
+    endTrimMs: clamp(settings.endTrimMs, 0, Number.MAX_SAFE_INTEGER),
+    fadeInMs: clamp(settings.fadeInMs, 0, Number.MAX_SAFE_INTEGER),
+    fadeOutMs: clamp(settings.fadeOutMs, 0, Number.MAX_SAFE_INTEGER),
+    volume: clamp(settings.volume, 0, 1.5),
+    pitchSemitones: clamp(settings.pitchSemitones, -24, 24)
+  };
+}
+
 export async function startAudio() {
   await Tone.start();
 }
@@ -24,27 +52,80 @@ export function getSamplePlayer(sample: Sample) {
 
 export async function playSample(sample: Sample) {
   await startAudio();
-  const player = getSamplePlayer(sample);
-  await Tone.loaded();
-  player.start();
+  return triggerOneShot(sample, {
+    startOffsetMs: 0,
+    endTrimMs: 0,
+    fadeInMs: 0,
+    fadeOutMs: 5,
+    volume: 1,
+    mute: false,
+    solo: false,
+    pitchSemitones: 0
+  }, Tone.now());
 }
 
-export function triggerOneShot(sample: Sample, settings: TrackSettings, time: Tone.Unit.Time) {
-  const player = getSamplePlayer(sample);
-  const startOffsetSeconds = Math.max(0, settings.startOffsetMs / 1000);
-  const fadeOutSeconds = Math.max(0, settings.fadeOutMs / 1000);
+export async function triggerOneShot(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now()): Promise<OneShotResult> {
+  if (!sample?.path) {
+    const result = oneShotResult(false, "missing", "Sample file missing or unsupported.");
+    console.warn(result.message, { sample });
+    return result;
+  }
 
-  player.volume.value = settings.volume <= 0 ? -Infinity : Tone.gainToDb(settings.volume);
-  player.fadeIn = Math.max(0, settings.fadeInMs / 1000);
-  player.fadeOut = fadeOutSeconds;
-  player.playbackRate = Math.pow(2, settings.pitchSemitones / 12);
+  const safeSettings = sanitizeSettings(settings);
+  let player: Tone.Player | undefined;
 
-  const bufferDuration = player.buffer.loaded ? player.buffer.duration : 0;
-  const duration = bufferDuration > startOffsetSeconds
-    ? Math.max(0.01, bufferDuration - startOffsetSeconds - Math.max(0, settings.endTrimMs / 1000))
-    : undefined;
+  try {
+    await startAudio();
 
-  player.start(time, startOffsetSeconds, duration);
+    // TODO: Optimize later with Tone.Players or decoded buffer caching. For now,
+    // each hit gets a fresh Player so fast clicks and overlapping steps cannot
+    // reuse a started/stopped source in an unsafe way.
+    player = new Tone.Player({ autostart: false }).toDestination();
+    await player.load(sample.path);
+
+    if (!player.buffer.loaded) {
+      player.dispose();
+      const result = oneShotResult(false, "not-loaded", "Sample not loaded yet, try again.");
+      console.warn(result.message, { sample });
+      return result;
+    }
+
+    const bufferDuration = player.buffer.duration;
+    const startOffsetSeconds = safeSettings.startOffsetMs / 1000;
+    const endTrimSeconds = safeSettings.endTrimMs / 1000;
+
+    if (startOffsetSeconds >= bufferDuration) {
+      player.dispose();
+      const result = oneShotResult(false, "start-after-end", "Skipped hit: start offset is beyond sample length.");
+      console.warn(result.message, { sample, startOffsetSeconds, bufferDuration });
+      return result;
+    }
+
+    const duration = bufferDuration - startOffsetSeconds - endTrimSeconds;
+    if (duration <= 0) {
+      player.dispose();
+      const result = oneShotResult(false, "invalid-duration", "Skipped hit: start offset is beyond sample length.");
+      console.warn(result.message, { sample, startOffsetSeconds, endTrimSeconds, bufferDuration });
+      return result;
+    }
+
+    player.volume.value = safeSettings.volume <= 0 ? -Infinity : Tone.gainToDb(safeSettings.volume);
+    player.fadeIn = safeSettings.fadeInMs / 1000;
+    player.fadeOut = safeSettings.fadeOutMs / 1000;
+    player.playbackRate = Math.pow(2, safeSettings.pitchSemitones / 12);
+
+    const startTime = typeof time === "number" && time < Tone.now() ? Tone.now() : time;
+    player.start(startTime, startOffsetSeconds, duration);
+    const disposalDelayMs = ((duration / player.playbackRate) + player.fadeOut + 0.25) * 1000;
+    globalThis.setTimeout(() => player?.dispose(), Math.max(250, disposalDelayMs));
+
+    return oneShotResult(true, "playing", "Playing.");
+  } catch (error) {
+    player?.dispose();
+    const result = oneShotResult(false, "error", "Sample file missing or unsupported.");
+    console.warn(result.message, { sample, error });
+    return result;
+  }
 }
 
 export function stopTransport() {

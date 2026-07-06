@@ -53,8 +53,19 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   }
 
   async function previewSample(sample: Sample) {
-    try { await playSample(sample); setSelectedSample(sample); setStatus(`Previewing ${sample.name}.`); }
-    catch { setStatus(`Could not play ${sample.name}. Make sure the file exists at ${sample.path}.`); }
+    const result = await playSample(sample);
+    setSelectedSample(sample);
+    setStatus(result.ok ? `Previewing ${sample.name}.` : result.message);
+  }
+
+  async function previewTrack(track: SequencerTrack) {
+    if (!track.assignedSample) {
+      setStatus("Sample file missing or unsupported.");
+      return;
+    }
+
+    const result = await triggerOneShot(track.assignedSample, track.settings, Tone.now());
+    setStatus(result.ok ? "Playing." : result.message);
   }
 
   function triggerStep(step: number, time: Tone.Unit.Time) {
@@ -65,7 +76,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
       if (hasSolo && !track.settings.solo) return;
       // One Tone scheduler calls this function once per 16th note, so each active
       // track/step gets exactly one player.start(time, ...) call per cycle.
-      triggerOneShot(track.assignedSample, track.settings, time);
+      void triggerOneShot(track.assignedSample, track.settings, time);
     });
   }
 
@@ -101,7 +112,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
     }, "16n");
     Tone.Transport.start();
     setIsPlaying(true);
-    setStatus("Playing sequence.");
+    setStatus("Playing.");
   }
 
   function setPanelState(panelId: PanelId, panelState: WindowPanelState) {
@@ -116,7 +127,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
       <div className="workspace-grid">
         <WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel>
         <WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} currentStep={currentStep} selectedTrackId={selectedTrackId} onToggleStep={toggleStep} onSelectTrack={setSelectedTrackId} /></WindowPanel>
-        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} onChange={updateTrackSettings} /></WindowPanel>
+        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} onChange={updateTrackSettings} onPreview={previewTrack} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel /></WindowPanel>
         <WindowPanel title="Waveform / Slicer" state={panels.waveform} onStateChange={(state) => setPanelState("waveform", state)}><WaveformPanel sample={selectedSample} /></WindowPanel>
         <WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} /></WindowPanel>

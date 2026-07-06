@@ -24,8 +24,7 @@ export default function WindowPanel({ title, children, state, onStateChange, cla
         <div className="window-toolbar">
           {toolbar}
           <button type="button" title="Minimize" onClick={() => onStateChange(isMinimized ? "normal" : "minimized")}>_</button>
-          <button type="button" title={isMaximized ? "Restore" : "Maximize"} onClick={() => onStateChange(isMaximized ? "normal" : "maximized")}>{isMaximized ? "▣" : "□"}</button>
-          <button type="button" title="Close (minimize for now)" onClick={() => onStateChange("minimized")}>×</button>
+          <button type="button" title={isMaximized ? "Restore" : "Maximize"} onClick={() => onStateChange(isMaximized ? "normal" : "maximized")}>{isMaximized ? "↺" : "□"}</button>
         </div>
       </div>
       {!isMinimized && <div className="window-content">{children}</div>}
