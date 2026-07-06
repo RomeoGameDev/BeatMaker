@@ -66,7 +66,6 @@ The workspace uses simple retro window-like panels. Each panel has a title bar w
 - Minimize: collapses the panel to only the title bar.
 - Maximize: expands the panel across most of the workspace.
 - Restore: returns a maximized panel to normal grid size.
-- Close button: currently minimizes the panel instead of removing it.
 - Reset Layout: the toolbar button restores all panels to normal size.
 
 Drag-and-drop window movement is intentionally not implemented yet, so the layout stays simple and responsive.
@@ -91,16 +90,15 @@ Drag-and-drop window movement is intentionally not implemented yet, so the layou
 - Build-time sample discovery for one-shots and loops.
 - Filename-based sample categorization and filters for All, One-shots, Loops, Kick, Snare, Hat, Bass, Guitar, and Other.
 - Tone.js sample preview with friendly status messages if files are missing.
-- Four-track, 16-step sequencer with clickable steps, selected track headers, and current-step highlighting.
+- Dynamic 16-step sequencer tracks with clickable steps, selected track headers, current-step highlighting, Add Track, and remove buttons for extra tracks.
 - Safer sequencer scheduling with a single active Tone.Transport scheduler at a time.
-- Per-track sample controls for start offset, end trim, fade in, fade out, volume, mute, solo, and pitch placeholder/playback rate.
+- Per-track sample controls for start offset, end trim, fade in, fade out, volume, mute, solo, pitch playback rate, reset settings, clear notes, clear pattern, and reset track.
 - Window-like panels for Sample Library, Step Sequencer, Track Controls, Arrangement, Waveform/Slicer, Export, and Guitar Tools.
 - Three CSS-variable skins: Dusty Purple, Winamp Classic Inspired, and Green CRT.
-- Placeholder arrangement, waveform/slicer, export, and guitar tools panels.
+- Real browser-decoded waveform display for assigned samples, plus placeholder arrangement, export, and guitar tools panels.
 
 ## Planned next
 
-- Real waveform view.
 - Slicer tools.
 - Export WAV.
 - Export stems ZIP.
@@ -110,10 +108,11 @@ Drag-and-drop window movement is intentionally not implemented yet, so the layou
 
 ## Track playback modes
 
-Each sequencer track can now play in one of two beginner-friendly modes:
+Each sequencer track can now play in beginner-friendly modes:
 
 - **One-shot mode**: the default drum-pad behavior. Active steps trigger the assigned sample at its original pitch, plus any track pitch adjustment.
 - **Keyboard mode**: treats the assigned sample like a simple pitched instrument. Pick a root note, choose an octave range, click steps, then assign note names to those steps.
+- **Chord mode for keyboard steps**: selected keyboard steps can play a chord instead of one note. Choose a chord root and chord type, preview the expanded notes, and the sequencer triggers the sample once per chord note at the same step time.
 
 ### How to use keyboard mode
 
@@ -124,17 +123,28 @@ Each sequencer track can now play in one of two beginner-friendly modes:
 5. Click steps in the Step Sequencer to turn them on.
 6. Select a step, then use the mini keyboard or step note selector to choose notes for that step.
 
-If a keyboard step is active but has no note, it plays the track root note. Pitch is calculated from the semitone difference between the root note and the step note.
+If a keyboard step is active but has no note, it plays the track root note. Pitch is calculated from the semitone difference between the root note and the step note. Chord steps expand simple chord types such as major, minor, diminished, augmented, sus2, sus4, major7, minor7, and dominant7.
 
 ## Sample Editor
 
-The Sample Editor panel edits the selected track sample playback settings. It includes a deterministic placeholder waveform, markers for start offset and end trim, fade regions, and the same safe preview settings used by sequencer playback.
+The Sample Editor panel edits the same selected track sample playback settings as Track Controls. It fetches the assigned sample in the browser, decodes it with AudioContext, draws a real purple canvas waveform, and overlays markers for start offset, end trim, fade in, and fade out. If a file cannot be fetched or decoded, the panel shows a friendly message instead of crashing.
 
 ### How to align a late sample
 
 1. Select the track that has the late sample assigned.
-2. Use the **Start Offset** slider or the **Start -1 ms / +1 ms / -10 ms / +10 ms** nudge buttons.
-3. Click **Preview Sample** to hear the current trim and fade settings.
-4. Use **Fade In** and **Fade Out** if the trimmed sample clicks or needs a softer edge.
+2. Open Sample Editor and use the real waveform to find where the useful transient begins.
+3. Move **Start Offset** with the slider or the **Start -1 ms / +1 ms / -10 ms / +10 ms** nudge buttons until the marker lines up with the transient.
+4. Click **Preview Sample** to hear the current trim and fade settings.
+5. Adjust **Fade In** and **Fade Out** if the trimmed sample clicks or needs a softer edge.
 
-Real silence trimming and transient detection are intentionally left as disabled coming-soon buttons for now.
+Real silence trimming, transient detection, upload, effects, and export are intentionally left for later.
+
+
+## Track management and reset controls
+
+- Click **+ Add Track** in the Step Sequencer to create the next empty one-shot track with 16 inactive steps and default playback settings.
+- Click **Remove** on an added track row to remove it. The app keeps at least one track and automatically selects another track if the selected one is removed.
+- In Track Controls, **Reset Settings** restores volume, pitch, start/end trim, fades, mute, and solo to defaults.
+- **Clear Notes** removes note/chord data while keeping active steps active.
+- **Clear Pattern** turns every step off and removes note/chord data.
+- **Reset Track** clears the assigned sample, returns the mode to one-shot, resets settings, and clears the pattern.

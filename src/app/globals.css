@@ -83,3 +83,10 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .fade-region { position: absolute; z-index: 2; top: 0; bottom: 0; pointer-events: none; background: repeating-linear-gradient(45deg, rgba(255,255,255,.15), rgba(255,255,255,.15) 4px, transparent 4px, transparent 8px); }
 .fade-in { left: 0; }
 .fade-out { right: 0; }
+.sequencer-actions { display: flex; justify-content: flex-end; margin-bottom: .6rem; }
+.remove-track { margin-top: .35rem; padding: .2rem .35rem; font-size: .68rem; }
+.chord-editor { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .55rem; }
+.chord-preview { width: 100%; margin: .15rem 0; color: var(--color-accent); }
+.sample-waveform-canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }
+.waveform-message { height: 100%; display: grid; place-items: center; color: var(--color-accent); opacity: .8; border: 1px dashed color-mix(in srgb, var(--color-accent), transparent 50%); }
+.sample-waveform { height: 6.5rem; }
