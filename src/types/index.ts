@@ -26,13 +26,21 @@ export type Skin = {
   variables: {
     "--color-bg": string;
     "--color-panel": string;
+    "--color-panel-2"?: string;
+    "--color-titlebar"?: string;
     "--color-text": string;
     "--color-accent": string;
     "--color-accent-2"?: string;
     "--color-border": string;
+    "--color-button"?: string;
+    "--color-button-hover"?: string;
     "--color-muted"?: string;
     "--color-waveform-original"?: string;
     "--color-waveform-processed"?: string;
+    "--panel-gradient"?: string;
+    "--titlebar-gradient"?: string;
+    "--button-gradient"?: string;
+    "--panel-shadow"?: string;
   };
 };
 
