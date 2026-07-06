@@ -148,3 +148,72 @@ Real silence trimming, transient detection, upload, effects, and export are inte
 - **Clear Notes** removes note/chord data while keeping active steps active.
 - **Clear Pattern** turns every step off and removes note/chord data.
 - **Reset Track** clears the assigned sample, returns the mode to one-shot, resets settings, and clears the pattern.
+
+## Retro DAW/Sampler MVP improvements
+
+The app has been extended toward a small retro DAW/sampler workflow while keeping the original one-shot, track assignment, sequencer, and keyboard basics intact.
+
+### Better waveform preview and playhead
+
+- Assigned samples are fetched and decoded in the browser with `AudioContext`.
+- The waveform is drawn on canvas from real audio data using min/max peak downsampling instead of fake/random bars.
+- Stereo files are visually mixed across available channels.
+- Decoded peak data is cached by sample path so trim, fade, pitch, and volume slider changes do not re-decode the sample.
+- The waveform shows a dark retro background, purple peaks, a center line, selected playback region, start marker, end trim marker, fade regions, fade curves, and an approximate yellow playback playhead.
+- Loading, unavailable, decode-error, and no-sample states show friendly messages.
+
+### Fade curves
+
+Track settings now include fade amount and visual curve shape:
+
+- `fadeInMs`
+- `fadeOutMs`
+- `fadeInCurve`
+- `fadeOutCurve`
+
+Available curve shapes are `linear`, `easeIn`, `easeOut`, and `exponential`. Tone.Player still uses simple fade-in/fade-out timing for audio; custom fade curve audio automation is planned for later.
+
+### FX Rack
+
+Each track now has a simple Reaper-inspired FX chain. You can:
+
+- Add EQ, Reverb, Overdrive, Distortion, or Compressor.
+- Add the same effect more than once.
+- Enable/bypass each effect instance.
+- Edit each instance independently.
+- Duplicate, remove, move up, and move down modules.
+- Bypass all FX or remove all FX.
+
+The audio engine attempts safe per-hit routing for enabled FX and falls back to dry playback if an FX node or chain fails, so the sequencer should keep running.
+
+### MVP effects
+
+- **EQ**: 3-band or 4-band peaking-filter chain with per-band frequency, gain, and Q controls.
+- **Reverb**: wet, decay, and pre-delay.
+- **Overdrive**: drive, tone, and wet using a simple distortion + tone filter approach.
+- **Distortion**: amount and wet.
+- **Compressor**: threshold, ratio, attack, release, and optional makeup gain.
+
+These are intentionally simple MVP effects, not final mastering-grade plugins.
+
+### Clickable Chord Composer
+
+Keyboard mode now includes a clickable piano-style Chord Composer:
+
+1. Select a track.
+2. Set **Mode** to **Keyboard**.
+3. Click a step in the sequencer.
+4. Click piano keys such as `C3`, `E3`, and `G3`.
+5. Click **Apply to Selected Step**.
+6. Press **Play** to trigger multiple pitched hits at that step.
+
+Preset buttons are available for Major, Minor, Sus2, Sus4, Maj7, Min7, and Dom7 chords. After choosing a preset, you can still manually add or remove piano keys.
+
+## Known limitations
+
+- The waveform is real audio data, but a spectrum analyzer is planned later.
+- Playhead sync is approximate for MVP and is not sample-accurate yet.
+- FX are simple MVP modules and may sound different from full DAW plugins.
+- Custom fade curve audio automation is planned later; curve shapes are currently visual while Tone.Player uses simple fade values.
+- Export WAV and stems ZIP are not implemented yet.
+- Full piano roll editing is not implemented yet.

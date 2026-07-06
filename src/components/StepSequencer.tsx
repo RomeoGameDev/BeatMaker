@@ -6,6 +6,8 @@ export const defaultTrackSettings: TrackSettings = {
   endTrimMs: 0,
   fadeInMs: 0,
   fadeOutMs: 5,
+  fadeInCurve: "linear",
+  fadeOutCurve: "linear",
   volume: 1,
   mute: false,
   solo: false,
@@ -34,7 +36,8 @@ export function makeInitialTracks(defaultSample?: Sample): SequencerTrack[] {
     settings: { ...defaultTrackSettings },
     mode: "oneshot",
     rootNote: "C3",
-    octaveRange: 1
+    octaveRange: 1,
+    effects: []
   }));
 }
 
@@ -49,7 +52,7 @@ export default function StepSequencer({ tracks, currentStep, selectedTrackId, se
           <div className="steps">
             {track.steps.map((step, stepIndex) => {
               const isSelected = selectedTrackId === track.id && selectedStepIndex === stepIndex;
-              const label = track.mode === "keyboard" && step.active ? (step.chord && step.note ? formatChordLabel(step.note, step.chord) : (step.note ?? track.rootNote)) : "";
+              const label = track.mode === "keyboard" && step.active ? (step.chord && step.note ? formatChordLabel(step.note, step.chord) : step.notes?.length ? step.notes.map((note) => note.replace(/-?\d+$/, "")).join("-") : (step.note ?? track.rootNote)) : "";
               return (
                 <button key={stepIndex} className={`step ${step.active ? "on" : ""} ${currentStep === stepIndex ? "playing" : ""} ${isSelected ? "selected-step" : ""} ${track.mode === "keyboard" ? "keyboard-step" : ""}`} onClick={(event) => { event.stopPropagation(); onToggleStep(track.id, stepIndex); }} aria-label={`${track.name} step ${stepIndex + 1}${label ? ` ${label}` : ""}`}>
                   {label && <span>{label}</span>}

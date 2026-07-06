@@ -1,5 +1,6 @@
 import * as Tone from "tone";
-import type { Sample, TrackSettings } from "@/types";
+import { createToneEffectNodes } from "@/lib/effects";
+import type { Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
 
@@ -57,6 +58,8 @@ export async function playSample(sample: Sample) {
     endTrimMs: 0,
     fadeInMs: 0,
     fadeOutMs: 5,
+    fadeInCurve: "linear",
+    fadeOutCurve: "linear",
     volume: 1,
     mute: false,
     solo: false,
@@ -64,7 +67,7 @@ export async function playSample(sample: Sample) {
   }, Tone.now());
 }
 
-export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now()): Promise<OneShotResult> {
+export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = []): Promise<OneShotResult> {
   if (!sample?.path) {
     const result = oneShotResult(false, "missing", "Sample file missing or unsupported.");
     console.warn(result.message, { sample });
@@ -73,6 +76,7 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
 
   const safeSettings = sanitizeSettings(settings);
   let player: Tone.Player | undefined;
+  let tempNodes: Tone.ToneAudioNode[] = [];
 
   try {
     await startAudio();
@@ -80,7 +84,7 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     // TODO: Optimize later with Tone.Players or decoded buffer caching. For now,
     // each hit gets a fresh Player so fast clicks and overlapping steps cannot
     // reuse a started/stopped source in an unsafe way.
-    player = new Tone.Player({ autostart: false }).toDestination();
+    player = new Tone.Player({ autostart: false });
     await player.load(sample.path);
 
     if (!player.buffer.loaded) {
@@ -109,19 +113,32 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
       return result;
     }
 
-    player.volume.value = safeSettings.volume <= 0 ? -Infinity : Tone.gainToDb(safeSettings.volume);
+    const trackGain = new Tone.Gain(safeSettings.volume);
+    tempNodes = [trackGain];
+    try {
+      tempNodes.push(...createToneEffectNodes(effects));
+      player.chain(...tempNodes, Tone.getDestination());
+    } catch (routingError) {
+      tempNodes.forEach((node) => node.dispose());
+      tempNodes = [];
+      player.toDestination();
+      player.volume.value = safeSettings.volume <= 0 ? -Infinity : Tone.gainToDb(safeSettings.volume);
+      console.warn("FX chain failed; playing dry sample.", routingError);
+    }
     player.fadeIn = safeSettings.fadeInMs / 1000;
     player.fadeOut = safeSettings.fadeOutMs / 1000;
+    // TODO: Custom fade curve audio automation will be implemented later.
     player.playbackRate = Math.pow(2, safeSettings.pitchSemitones / 12);
 
     const startTime = typeof time === "number" && time < Tone.now() ? Tone.now() : time;
     player.start(startTime, startOffsetSeconds, duration);
     const disposalDelayMs = ((duration / player.playbackRate) + player.fadeOut + 0.25) * 1000;
-    globalThis.setTimeout(() => player?.dispose(), Math.max(250, disposalDelayMs));
+    globalThis.setTimeout(() => { player?.dispose(); tempNodes.forEach((node) => node.dispose()); }, Math.max(250, disposalDelayMs));
 
     return oneShotResult(true, "playing", "Playing.");
   } catch (error) {
     player?.dispose();
+    tempNodes.forEach((node) => node.dispose());
     const result = oneShotResult(false, "error", "Sample file missing or unsupported.");
     console.warn(result.message, { sample, error });
     return result;
