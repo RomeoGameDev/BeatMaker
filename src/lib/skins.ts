@@ -5,33 +5,33 @@ export const skins: Skin[] = [
     id: "dusty-purple",
     name: "Dusty Purple",
     variables: {
-      background: "#151020",
-      panelBackground: "#241832",
-      textColor: "#f4eaff",
-      accentColor: "#c77dff",
-      borderColor: "#6f4a8e"
-    }
+      "--color-bg": "#151020",
+      "--color-panel": "#241832",
+      "--color-text": "#f4eaff",
+      "--color-accent": "#c77dff",
+      "--color-border": "#6f4a8e",
+    },
   },
   {
-    id: "winamp-classic",
+    id: "winamp-classic-inspired",
     name: "Winamp Classic Inspired",
     variables: {
-      background: "#161922",
-      panelBackground: "#252a36",
-      textColor: "#e6edf3",
-      accentColor: "#ffb000",
-      borderColor: "#6b7280"
-    }
+      "--color-bg": "#161922",
+      "--color-panel": "#252a36",
+      "--color-text": "#e6edf3",
+      "--color-accent": "#ffb000",
+      "--color-border": "#6b7280",
+    },
   },
   {
     id: "green-crt",
     name: "Green CRT",
     variables: {
-      background: "#061006",
-      panelBackground: "#0b1c0b",
-      textColor: "#d7ffd7",
-      accentColor: "#39ff14",
-      borderColor: "#1f7a1f"
-    }
-  }
+      "--color-bg": "#061006",
+      "--color-panel": "#0b1c0b",
+      "--color-text": "#d7ffd7",
+      "--color-accent": "#39ff14",
+      "--color-border": "#1f7a1f",
+    },
+  },
 ];

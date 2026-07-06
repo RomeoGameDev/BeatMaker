@@ -11,11 +11,11 @@ export type Skin = {
   id: string;
   name: string;
   variables: {
-    background: string;
-    panelBackground: string;
-    textColor: string;
-    accentColor: string;
-    borderColor: string;
+    "--color-bg": string;
+    "--color-panel": string;
+    "--color-text": string;
+    "--color-accent": string;
+    "--color-border": string;
   };
 };
 
