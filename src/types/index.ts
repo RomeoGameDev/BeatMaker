@@ -41,7 +41,14 @@ export type TrackSettings = {
   mute: boolean;
   solo: boolean;
   pitchSemitones: number;
+  fadeInCurve: FadeCurve;
+  fadeOutCurve: FadeCurve;
 };
+
+export type FadeCurve = "linear" | "easeIn" | "easeOut" | "exponential";
+export type TrackEffectType = "eq" | "reverb" | "overdrive" | "distortion" | "compressor";
+export type EqBand = { label: string; frequencyHz: number; gainDb: number; q: number; };
+export type TrackEffect = { id: string; type: TrackEffectType; name: string; enabled: boolean; params: Record<string, unknown>; };
 
 export type SequencerTrack = {
   id: number;
@@ -54,4 +61,5 @@ export type SequencerTrack = {
   octaveRange: number;
   minNote?: string;
   maxNote?: string;
+  effects: TrackEffect[];
 };
