@@ -107,3 +107,34 @@ Drag-and-drop window movement is intentionally not implemented yet, so the layou
 - Mixer/effects including reverb, delay, distortion, overdrive, and EQ3.
 - Winamp/QMMP skin import.
 - Guitar tab editor.
+
+## Track playback modes
+
+Each sequencer track can now play in one of two beginner-friendly modes:
+
+- **One-shot mode**: the default drum-pad behavior. Active steps trigger the assigned sample at its original pitch, plus any track pitch adjustment.
+- **Keyboard mode**: treats the assigned sample like a simple pitched instrument. Pick a root note, choose an octave range, click steps, then assign note names to those steps.
+
+### How to use keyboard mode
+
+1. Assign a sample to a track from the Sample Library.
+2. Select the track by clicking its header or one of its steps.
+3. In Track Controls, change **Mode** to **Keyboard**.
+4. Choose a **Root Note** such as `C3` and an **Octave Range** of 1, 2, or 3.
+5. Click steps in the Step Sequencer to turn them on.
+6. Select a step, then use the mini keyboard or step note selector to choose notes for that step.
+
+If a keyboard step is active but has no note, it plays the track root note. Pitch is calculated from the semitone difference between the root note and the step note.
+
+## Sample Editor
+
+The Sample Editor panel edits the selected track sample playback settings. It includes a deterministic placeholder waveform, markers for start offset and end trim, fade regions, and the same safe preview settings used by sequencer playback.
+
+### How to align a late sample
+
+1. Select the track that has the late sample assigned.
+2. Use the **Start Offset** slider or the **Start -1 ms / +1 ms / -10 ms / +10 ms** nudge buttons.
+3. Click **Preview Sample** to hear the current trim and fade settings.
+4. Use **Fade In** and **Fade Out** if the trimmed sample clicks or needs a softer edge.
+
+Real silence trimming and transient detection are intentionally left as disabled coming-soon buttons for now.

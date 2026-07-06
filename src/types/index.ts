@@ -2,6 +2,13 @@ export type SampleCategory = "kick" | "snare" | "hat" | "clap" | "perc" | "bass"
 
 export type SampleType = "oneshot" | "loop";
 
+export type TrackMode = "oneshot" | "keyboard";
+
+export type SequencerStep = {
+  active: boolean;
+  note?: string;
+};
+
 export type Sample = {
   id: string;
   filename: string;
@@ -38,6 +45,11 @@ export type SequencerTrack = {
   id: number;
   name: string;
   assignedSample?: Sample;
-  steps: boolean[];
+  steps: SequencerStep[];
   settings: TrackSettings;
+  mode: TrackMode;
+  rootNote: string;
+  octaveRange: number;
+  minNote?: string;
+  maxNote?: string;
 };
