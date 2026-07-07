@@ -10,7 +10,7 @@ import StepSequencer, { defaultTrackSettings, makeInitialTracks, makeSteps } fro
 import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
-import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, triggerSample } from "@/lib/audioEngine";
+import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample } from "@/lib/audioEngine";
 import { downloadBlob, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
 import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
@@ -180,6 +180,11 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     animatePlayhead(track);
     const updated = await ensureDuration(track.assignedSample);
     const result = await triggerSample(updated, track.settings, Tone.now(), track.effects);
+    if (result.status === "decode-failed") {
+      const fallbackResult = await playHtmlAudioFallback(updated);
+      setStatus(fallbackResult.ok ? fallbackResult.message : result.message);
+      return;
+    }
     setStatus(result.ok ? "Playing." : result.message);
   }
 
@@ -195,7 +200,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
         if (track.id === selectedTrackId) animatePlayhead(track);
         chordNotes.forEach((note) => {
           const pitchSemitones = track.settings.pitchSemitones + semitoneDiff(track.rootNote, note);
-          void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects);
+          void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects).then((result) => { if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); });
         });
         return;
       }
@@ -210,7 +215,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       if (track.id === selectedTrackId) animatePlayhead(track);
       const regionSeconds = (60 / bpm / 4) * loopLength;
       const duration = isLoop && (track.loopMode === "cut-to-step-length" || track.loopMode === "loop-region") ? regionSeconds : undefined;
-      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, duration).then((result) => { if (isLoop && result.ok) activeLoopPlayersRef.current.set(track.id, { player: result.player, untilStep: absoluteStep + loopLength }); });
+      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, duration).then((result) => { if (isLoop && result.ok) activeLoopPlayersRef.current.set(track.id, { player: result.player, untilStep: absoluteStep + loopLength }); if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); });
     });
   }
 

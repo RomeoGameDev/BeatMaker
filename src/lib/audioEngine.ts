@@ -8,6 +8,7 @@ const players = new Map<string, Tone.Player>();
 const activePlayers = new Set<Tone.Player>();
 const activeNodes = new Set<Tone.ToneAudioNode>();
 const activeDisposals = new Set<ReturnType<typeof globalThis.setTimeout>>();
+const fallbackPreviewElements = new Set<HTMLAudioElement>();
 
 function disposeActivePlayer(player: Tone.Player | undefined, nodes: Tone.ToneAudioNode[] = []) {
   if (!player) return;
@@ -23,7 +24,9 @@ type OneShotStatus =
   | "not-loaded"
   | "start-after-end"
   | "invalid-duration"
-  | "error";
+  | "error"
+  | "preview-fallback"
+  | "decode-failed";
 
 export type OneShotResult = {
   ok: boolean;
@@ -72,7 +75,7 @@ export function getSamplePlayer(sample: Sample) {
 
 export async function playSample(sample: Sample) {
   await startAudio();
-  return triggerOneShot(sample, {
+  const result = await triggerOneShot(sample, {
     startOffsetMs: 0,
     endTrimMs: 0,
     fadeInMs: 0,
@@ -84,6 +87,26 @@ export async function playSample(sample: Sample) {
     solo: false,
     pitchSemitones: 0
   }, Tone.now());
+  if (result.status === "decode-failed") return playHtmlAudioFallback(sample);
+  return result;
+}
+
+export async function playHtmlAudioFallback(sample: Sample): Promise<OneShotResult> {
+  if (!sample.path) return oneShotResult(false, "missing", "Sample file missing or unsupported.");
+  const audio = new Audio(normalizeSamplePath(sample.path));
+  audio.preload = "auto";
+  fallbackPreviewElements.add(audio);
+  const cleanup = () => fallbackPreviewElements.delete(audio);
+  audio.addEventListener("ended", cleanup, { once: true });
+  audio.addEventListener("pause", cleanup, { once: true });
+  try {
+    await audio.play();
+    return oneShotResult(true, "preview-fallback", "Preview playing with browser audio fallback. Convert to PCM WAV for sequencing/editing.");
+  } catch (error) {
+    cleanup();
+    console.warn("HTML audio fallback preview failed.", { sample, error });
+    return oneShotResult(false, "error", "Found, but neither WebAudio nor browser audio preview could play it. Convert to PCM WAV for editing.");
+  }
 }
 
 export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = [], maxDurationSeconds?: number): Promise<OneShotResult & { player?: Tone.Player }> {
@@ -113,8 +136,8 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     } catch (loadError) {
       disposeActivePlayer(player);
       const status = loadError instanceof SampleLoadError ? loadError.status : "error";
-      const resultStatus = status === "fetch failed" ? "missing" : "error";
-      const message = loadError instanceof Error ? loadError.message : `Could not load ${sampleUrl}`;
+      const resultStatus = status === "fetch failed" ? "missing" : status === "decode failed" ? "decode-failed" : "error";
+      const message = status === "decode failed" ? "Skipped hit: sample can preview with browser audio, but cannot be sequenced/edited until converted to PCM WAV." : loadError instanceof Error ? loadError.message : `Could not load ${sampleUrl}`;
       return oneShotResult(false, resultStatus, message);
     }
 
@@ -194,6 +217,8 @@ export function stopAllAudio() {
   activePlayers.clear();
   Array.from(activeNodes).forEach((node) => { try { node.dispose(); } catch {} });
   activeNodes.clear();
+  Array.from(fallbackPreviewElements).forEach((audio) => { try { audio.pause(); audio.currentTime = 0; audio.src = ""; audio.load(); } catch {} });
+  fallbackPreviewElements.clear();
 }
 
 export { Tone };
