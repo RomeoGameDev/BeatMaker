@@ -30,7 +30,7 @@ export default function SampleLibrary({ samples, onPreview, onAssign }: Props) {
       <div className="sample-list">
         {filteredSamples.map((sample) => (
           <article className="sample-row" key={sample.id}>
-            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}</small><small>Path: {sample.path}</small></div>
+            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isRendered ? " · Rendered in app" : ""}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Path: {sample.path}</small></div>
             <button onClick={() => onPreview(sample)}>Preview</button>
             <button onClick={() => onAssign(sample)}>Assign</button>
           </article>
