@@ -5,7 +5,7 @@ import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample, SampleCategory, SampleType } from "@/types";
 
 type SampleFilter = "all" | SampleType | SampleCategory;
-type Props = { samples: Sample[]; selectedSampleId?: string; onSelect?: (sample: Sample) => void; onPreview: (sample: Sample) => void; onAssign: (sample: Sample) => void; onRemove?: (sample: Sample) => void; onImport?: (file: File, type: "auto" | "oneshot" | "loop") => void };
+type Props = { samples: Sample[]; selectedSampleId?: string; onSelect?: (sample: Sample) => void; onPlay: (sample: Sample) => void; onAssign: (sample: Sample) => void; onRemove?: (sample: Sample) => void; onImport?: (file: File, type: "auto" | "oneshot" | "loop") => void };
 
 function sampleStatusLabel(sample: Sample) {
   if (sample.loadStatus === "loaded") return "loaded = fully supported";
@@ -26,7 +26,7 @@ const filters: { label: string; value: SampleFilter }[] = [
   { label: "Other", value: "other" }
 ];
 
-export default function SampleLibrary({ samples, selectedSampleId, onSelect, onPreview, onAssign, onRemove, onImport }: Props) {
+export default function SampleLibrary({ samples, selectedSampleId, onSelect, onPlay, onAssign, onRemove, onImport }: Props) {
   const [filter, setFilter] = useState<SampleFilter>("all");
   const [showDebug, setShowDebug] = useState(false);
   const [importType, setImportType] = useState<"auto" | "oneshot" | "loop">("auto");
@@ -44,7 +44,7 @@ export default function SampleLibrary({ samples, selectedSampleId, onSelect, onP
         {filteredSamples.map((sample) => (
           <article className={`sample-row ${selectedSampleId === sample.id ? "selected-sample" : ""}`} key={sample.id} onClick={() => onSelect?.(sample)}>
             <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isImported ? " · Imported" : sample.isRendered ? " · Rendered in app" : " · Disk sample"}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Status: {sampleStatusLabel(sample)}</small>{sample.loadStatus === "decode failed" && <small>Found, but not WebAudio-decodable. Browser conversion is planned; use the ffmpeg helper below.</small>}{sample.source === "converted" && <small>Converted in memory from: {sample.originalPath}</small>}{sample.loadStatus === "decode failed" && <small>Helper: <code>ffmpeg -y -i input.wav -acodec pcm_s16le -ar 44100 output.wav</code></small>}{sample.loadStatus === "fetch failed" && sample.lastErrorMessage && <small>{sample.lastErrorMessage}</small>}<small>Path: {sample.path}</small>{showDebug && <div className="sample-debug"><strong>Audio file debug</strong><dl><dt>id</dt><dd>{sample.id}</dd><dt>path</dt><dd>{sample.path}</dd><dt>normalized path</dt><dd>{sample.normalizedPath ?? normalizeSamplePath(sample.path)}</dd><dt>load status</dt><dd>{sample.loadStatus ?? "not loaded"}</dd><dt>last error</dt><dd>{sample.lastErrorMessage ?? "none"}</dd></dl></div>}{sample.isImported && <small>Imported · saved locally</small>}{sample.isRendered && <small>Rendered in app · saved locally</small>}{!(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb") && <small className="hint">Remove from disk manually (not available from the browser).</small>}</div>
-            <button onClick={() => onPreview(sample)}>Preview</button>
+            <button onClick={() => onPlay(sample)}>Play</button>
             <button onClick={() => onAssign(sample)}>Assign</button>
             {(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb") && <button onClick={() => onRemove?.(sample)}>Remove</button>}
           </article>
