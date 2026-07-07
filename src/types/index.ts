@@ -23,7 +23,9 @@ export type Sample = {
   durationMs?: number;
   isLong?: boolean;
   isRendered?: boolean;
-  source?: "in-app" | "public" | "converted";
+  source?: "in-app" | "public" | "converted" | "indexeddb";
+  createdAt?: number;
+  metadata?: Record<string, unknown>;
   originalPath?: string;
   normalizedPath?: string;
   loadStatus?: import("@/lib/sampleLoader").SampleLoadStatus;
