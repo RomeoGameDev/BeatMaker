@@ -1,8 +1,9 @@
 import * as Tone from "tone";
 import { createToneEffectNodes } from "@/lib/effects";
+import { semitoneDiff } from "@/lib/musicTheory";
 import { loadSampleAudioBuffer, SampleLoadError } from "@/lib/sampleLoader";
 import { normalizeSamplePath } from "@/lib/samplePaths";
-import type { Sample, TrackEffect, TrackSettings } from "@/types";
+import type { GuitarLabEffects, GuitarLabMode, NoteDuration, Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
 const activePlayers = new Set<Tone.Player>();
@@ -200,6 +201,32 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     const result = oneShotResult(false, "error", `Could not load ${sampleUrl}`);
     console.warn(result.message, { sample, error });
     return result;
+  }
+}
+
+export async function previewPitchedNotes({ sample, rootNote, notes, mode, bpm, noteDuration, settings, effects }: { sample?: Sample; rootNote: string; notes: string[]; mode: GuitarLabMode; bpm: number; noteDuration: NoteDuration; settings?: Partial<TrackSettings>; effects?: GuitarLabEffects; }): Promise<OneShotResult> {
+  if (!sample) return oneShotResult(false, "missing", "Select a source sample to preview or render chords.");
+  if (!notes.length) return oneShotResult(false, "missing", "Select at least one note to preview.");
+  const stepSeconds = (60 / Math.max(1, bpm)) * ({ "1/4": 1, "1/8": 0.5, "1/16": 0.25 }[noteDuration] ?? 0.5);
+  const baseSettings: TrackSettings = {
+    startOffsetMs: 0, endTrimMs: 0, fadeInMs: 2, fadeOutMs: 12, fadeInCurve: "linear", fadeOutCurve: "linear",
+    volume: effects?.volume ?? 1, mute: false, solo: false, pitchSemitones: effects?.pitchOffsetSemitones ?? 0, ...settings
+  };
+  const fx: TrackEffect[] = [
+    effects?.reverbWet ? { id: "guitar-lab-reverb", type: "reverb", name: "Guitar Lab Reverb", enabled: true, params: { wet: effects.reverbWet, decay: 1.5 } } : undefined,
+    effects?.delayWet ? { id: "guitar-lab-delay", type: "delay", name: "Guitar Lab Delay", enabled: true, params: { wet: effects.delayWet, delayTime: "8n", feedback: 0.25 } } : undefined,
+    effects?.drive ? { id: "guitar-lab-drive", type: "distortion", name: "Guitar Lab Drive", enabled: true, params: { wet: Math.min(1, effects.drive), distortion: effects.drive } } : undefined,
+    effects?.chorusWet ? { id: "guitar-lab-chorus", type: "chorus", name: "Guitar Lab Chorus", enabled: true, params: { wet: effects.chorusWet } } : undefined
+  ].filter(Boolean) as TrackEffect[];
+  try {
+    await startAudio();
+    const now = Tone.now() + 0.03;
+    const results = await Promise.all(notes.map((note, index) => triggerSample(sample, { ...baseSettings, pitchSemitones: (baseSettings.pitchSemitones || 0) + semitoneDiff(rootNote, note) }, now + (mode === "riff" ? index * stepSeconds : 0), fx, mode === "riff" ? stepSeconds * 0.95 : undefined)));
+    const failed = results.find((result) => !result.ok);
+    return failed ?? oneShotResult(true, "playing", mode === "riff" ? "Riff preview playing." : "Chord preview playing.");
+  } catch (error) {
+    console.warn("Guitar Lab preview failed.", error);
+    return oneShotResult(false, "error", "Could not preview Guitar Lab notes.");
   }
 }
 
