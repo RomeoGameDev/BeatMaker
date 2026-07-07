@@ -12,6 +12,7 @@ import TrackControls from "@/components/TrackControls";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
 import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, triggerSample } from "@/lib/audioEngine";
 import { downloadBlob, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
+import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
 import { buildChord, semitoneDiff } from "@/lib/musicTheory";
 import { skins } from "@/lib/skins";
@@ -68,13 +69,22 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }
 
   async function ensureDuration(sample: Sample) {
+    const loadingSample = { ...sample, normalizedPath: sample.normalizedPath, loadStatus: "loading" as const, lastErrorMessage: undefined };
+    applySampleDuration(loadingSample);
     try { const meta = await decodeSampleDuration(sample); const updated = { ...sample, ...meta }; applySampleDuration(updated); return updated; }
-    catch (error) { console.warn("Could not decode sample duration.", error); return sample; }
+    catch (error) {
+      const lastErrorMessage = error instanceof Error ? error.message : String(error);
+      const loadStatus = error instanceof SampleLoadError ? error.status : "decode failed";
+      const failedSample = { ...sample, normalizedPath: error instanceof SampleLoadError ? error.normalizedPath : sample.normalizedPath, loadStatus, lastErrorMessage };
+      applySampleDuration(failedSample);
+      console.warn("Could not decode sample duration.", error);
+      return failedSample;
+    }
   }
 
   function assignSample(sample: Sample) {
     void ensureDuration(sample);
-    setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: sample, loopMode: (sample.type === "loop" || sample.isLong) ? "play-full" : "oneshot", loopLengthSteps: track.loopLengthSteps ?? 16, retriggerLoop: track.retriggerLoop ?? false } : track));
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: { ...sample, normalizedPath: sample.normalizedPath }, loopMode: (sample.type === "loop" || sample.isLong) ? "play-full" : "oneshot", loopLengthSteps: track.loopLengthSteps ?? 16, retriggerLoop: track.retriggerLoop ?? false } : track));
     setStatus(`${sample.name} assigned to Track ${selectedTrackId}.`);
   }
 

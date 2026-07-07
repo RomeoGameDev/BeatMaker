@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { loadSampleAudioBuffer } from "@/lib/sampleLoader";
+import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample, TrackSettings } from "@/types";
 
 export type WaveformMode = "original" | "processed" | "overlay";
@@ -55,24 +57,18 @@ export default function SampleWaveform({ sample, settings, playheadMs, processed
   useEffect(() => {
     if (!sample?.path) { setWaveform({ status: "idle", peaks: [], durationMs: 0 }); return; }
     let cancelled = false;
-    const samplePath = sample.path;
+    const activeSample = sample;
+    const samplePath = normalizeSamplePath(activeSample.path);
     async function loadWaveform() {
       const cached = peakCache.get(samplePath);
       if (cached) { setWaveform({ status: "ready", ...cached }); return; }
       setWaveform({ status: "loading", peaks: [], durationMs: 0 });
       try {
-        const response = await fetch(samplePath);
-        if (!response.ok) { if (!cancelled) setWaveform({ status: "unavailable", peaks: [], durationMs: 0 }); return; }
-        const arrayBuffer = await response.arrayBuffer();
-        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!AudioContextClass) { if (!cancelled) setWaveform({ status: "decode-error", peaks: [], durationMs: 0 }); return; }
-        const context = new AudioContextClass();
-        const audioBuffer = await context.decodeAudioData(arrayBuffer.slice(0));
-        await context.close();
-        const decoded = { peaks: downsample(audioBuffer), durationMs: audioBuffer.duration * 1000 };
+        const loaded = await loadSampleAudioBuffer(activeSample);
+        const decoded = { peaks: downsample(loaded.audioBuffer), durationMs: loaded.audioBuffer.duration * 1000 };
         peakCache.set(samplePath, decoded);
         if (!cancelled) setWaveform({ status: "ready", ...decoded });
-      } catch { if (!cancelled) setWaveform({ status: "decode-error", peaks: [], durationMs: 0 }); }
+      } catch (error) { if (!cancelled) setWaveform({ status: error instanceof Error && error.message.startsWith("Could not fetch") ? "unavailable" : "decode-error", peaks: [], durationMs: 0 }); }
     }
     void loadWaveform();
     return () => { cancelled = true; };

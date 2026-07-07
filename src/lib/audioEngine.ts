@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 import { createToneEffectNodes } from "@/lib/effects";
-import { normalizeSamplePath, SUPPORTED_AUDIO_EXTENSIONS } from "@/lib/samplePaths";
+import { loadSampleAudioBuffer, SampleLoadError } from "@/lib/sampleLoader";
+import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
@@ -37,12 +38,6 @@ function sampleDebug(sample: Sample, normalizedUrl: string) {
   return { id: sample.id, type: sample.type, category: sample.category, path: sample.path, normalizedUrl };
 }
 
-function hasSupportedAudioExtension(url: string) {
-  if (/^(blob:|data:)/i.test(url)) return true;
-  const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
-  const extension = pathname.match(/\.[a-z0-9]+$/)?.[0];
-  return Boolean(extension && SUPPORTED_AUDIO_EXTENSIONS.has(extension));
-}
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
 function sanitizeSettings(settings: TrackSettings) {
@@ -68,7 +63,7 @@ export function getSamplePlayer(sample: Sample) {
   let player = players.get(sample.id);
 
   if (!player) {
-    player = new Tone.Player({ url: sample.path, autostart: false }).toDestination();
+    player = new Tone.Player({ url: normalizeSamplePath(sample.path), autostart: false }).toDestination();
     players.set(sample.id, player);
   }
 
@@ -110,36 +105,17 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     // reuse a started/stopped source in an unsafe way.
     const sampleUrl = normalizeSamplePath(sample.path);
     if (isDevelopment) console.debug("Loading sample", sampleDebug(sample, sampleUrl));
-    if (!hasSupportedAudioExtension(sampleUrl)) {
-      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
-      console.warn(result.message, sampleDebug(sample, sampleUrl));
-      return result;
-    }
 
-    let response: Response;
-    try {
-      response = await fetch(sampleUrl);
-    } catch (fetchError) {
-      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
-      console.warn(result.message, { ...sampleDebug(sample, sampleUrl), error: fetchError });
-      return result;
-    }
-    if (!response.ok) {
-      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
-      console.warn(result.message, { ...sampleDebug(sample, sampleUrl), status: response.status });
-      return result;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
     player = new Tone.Player({ autostart: false });
     try {
-      const decoded = await Tone.getContext().decodeAudioData(arrayBuffer.slice(0));
-      player.buffer.set(decoded);
-    } catch (decodeError) {
-      const result = oneShotResult(false, "error", `Could not load ${sampleUrl}`);
-      console.warn("Could not decode sample audio.", { ...sampleDebug(sample, sampleUrl), error: decodeError });
+      const loaded = await loadSampleAudioBuffer(sample);
+      player.buffer.set(loaded.audioBuffer);
+    } catch (loadError) {
       disposeActivePlayer(player);
-      return result;
+      const status = loadError instanceof SampleLoadError ? loadError.status : "error";
+      const resultStatus = status === "fetch failed" ? "missing" : "error";
+      const message = loadError instanceof Error ? loadError.message : `Could not load ${sampleUrl}`;
+      return oneShotResult(false, resultStatus, message);
     }
 
     if (!player.buffer.loaded) {

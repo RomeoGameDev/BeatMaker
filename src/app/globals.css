@@ -169,3 +169,8 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
   color: var(--color-accent);
 }
 .slot-count-control select { min-width: 5rem; }
+.sample-debug { margin-top: .35rem; }
+.sample-debug summary { cursor: pointer; color: var(--color-accent); font-size: .78rem; }
+.sample-debug dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .15rem .45rem; margin: .35rem 0 0; font-size: .72rem; }
+.sample-debug dt { color: var(--color-muted); }
+.sample-debug dd { margin: 0; overflow-wrap: anywhere; }
