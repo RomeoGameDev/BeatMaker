@@ -1,3 +1,4 @@
+import { PCM_WAV_DECODE_MESSAGE } from "@/lib/sampleLoader";
 import type { SequencerTrack, TrackSettings } from "@/types";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -32,7 +33,12 @@ export async function renderTrackDryWav(track: SequencerTrack) {
   const response = await fetch(track.assignedSample.path);
   if (!response.ok) throw new Error("Could not load sample.");
   const context = new OfflineAudioContext(1, 1, 44100);
-  const sourceBuffer = await context.decodeAudioData(await response.arrayBuffer());
+  let sourceBuffer: AudioBuffer;
+  try {
+    sourceBuffer = await context.decodeAudioData(await response.arrayBuffer());
+  } catch {
+    throw new Error(PCM_WAV_DECODE_MESSAGE);
+  }
   const rate = sourceBuffer.sampleRate;
   const start = Math.floor(clamp(track.settings.startOffsetMs / 1000, 0, sourceBuffer.duration) * rate);
   const end = Math.max(start, sourceBuffer.length - Math.floor(clamp(track.settings.endTrimMs / 1000, 0, sourceBuffer.duration) * rate));

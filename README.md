@@ -141,11 +141,21 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 - **Arrangement slot count.** Arrangement timelines can be resized to 4, 8, 16, 24, 32, or 64 slots. Increasing adds empty slots; decreasing truncates only the extra slots, and Project JSON saves both the slot count and slot contents.
 - **Project JSON limitation.** Project JSON can store rendered sample metadata, but it cannot persist the temporary blob/object URL audio after refresh. Download rendered samples before closing or refreshing the page.
 
-### Recommended WAV format
+### Audio troubleshooting: browser-decodable WAVs
 
-If a WAV is visible in the Sample Library but will not play, convert it to a browser-friendly PCM WAV. Recommended formats:
+Some WAV files are not browser-decodable even when they play correctly in DAWs or desktop audio tools. The app can find those files by path, but Web Audio `decodeAudioData` may still reject their encoding. When that happens, the Sample Library labels the file as **decode failed = preview fallback only** instead of missing. The Preview button may still audition it through browser audio, but waveform, trim, sequencing, and render/export features require a WebAudio-decodable file.
+
+Convert problem WAVs to PCM WAV with ffmpeg:
+
+```bash
+ffmpeg -y -i input.wav -acodec pcm_s16le -ar 44100 output.wav
+```
+
+Recommended formats:
 
 - PCM WAV
-- 16-bit or 24-bit
+- 16-bit
 - 44.1 kHz or 48 kHz
 - mono or stereo
+
+For example, if `public/samples/oneshots/kick01.wav` is decode-failed but `kick01_pcm.wav` works, keep using the PCM version for editing/sequencing or replace the original with a converted PCM WAV.

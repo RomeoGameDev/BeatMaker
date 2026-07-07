@@ -3,6 +3,9 @@ import type { Sample } from "@/types";
 
 export type SampleLoadStatus = "not loaded" | "loading" | "loaded" | "fetch failed" | "decode failed";
 
+export const PCM_WAV_HELPER_COMMAND = "ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav";
+export const PCM_WAV_DECODE_MESSAGE = `Found, but not WebAudio-decodable. Convert to PCM WAV for editing. ${PCM_WAV_HELPER_COMMAND}`;
+
 export type LoadedSampleAudio = {
   audioBuffer: AudioBuffer;
   normalizedPath: string;
@@ -80,7 +83,7 @@ export async function loadSampleAudioBuffer(sample: Sample): Promise<LoadedSampl
 
   const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextClass) {
-    const message = "File was found but browser could not decode it. Try PCM WAV, MP3, or OGG.";
+    const message = PCM_WAV_DECODE_MESSAGE;
     warnSampleLoadFailure(message, sample, { normalizedPath, fetchUrl, httpStatus: response.status, contentType, fileExtension: extension, byteLength: arrayBuffer.byteLength });
     throw new SampleLoadError(message, { status: "decode failed", normalizedPath, fetchUrl, httpStatus: response.status, contentType, extension });
   }
@@ -90,7 +93,7 @@ export async function loadSampleAudioBuffer(sample: Sample): Promise<LoadedSampl
     const audioBuffer = await context.decodeAudioData(arrayBuffer.slice(0));
     return { audioBuffer, normalizedPath, fetchUrl, contentType, byteLength: arrayBuffer.byteLength };
   } catch (decodeError) {
-    const message = "File was found but browser could not decode it. Try PCM WAV, MP3, or OGG.";
+    const message = PCM_WAV_DECODE_MESSAGE;
     warnSampleLoadFailure(message, sample, { normalizedPath, fetchUrl, httpStatus: response.status, contentType, fileExtension: extension, byteLength: arrayBuffer.byteLength, decodeAudioDataError: decodeError });
     throw new SampleLoadError(message, { status: "decode failed", normalizedPath, fetchUrl, httpStatus: response.status, contentType, extension, decodeError });
   } finally {
