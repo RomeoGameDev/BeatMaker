@@ -19,7 +19,7 @@ npm run build
 
 The Skin selector includes the existing built-in themes, a readable **Modern Retro 2000s** theme, and three CSS-only themes inspired by classic Windows UI eras:
 
-- **Modern Retro 2000s** — modern dark charcoal/deep-blue panels with readable text, early-2000s glossy titlebars, neon cyan accents, warm orange highlights, cyan/blue original waveforms, and orange/gold processed waveforms.
+- **Modern Retro 2000s** — modern dark charcoal/deep-blue panels with readable text, early-2000s glossy titlebars, neon cyan accents, warm orange highlights, darker section boxes, higher-contrast inputs/sliders, cyan/blue original waveforms, and orange/gold processed waveforms.
 - **Aero Glass** — Vista-era glass inspiration with translucent blue/purple panels, glossy gradients, cyan accents, cyan/blue original waveforms, and warm gold processed waveforms.
 - **XP Royale** — cleaner XP/Royale inspiration with bright blue title bars, cream panel surfaces, rounded controls, royal-blue accents, green secondary accents, blue original waveforms, and orange processed waveforms.
 - **Seven Glass** — Windows 7 Aero inspiration with darker blue/grey glass panels, restrained gradients, clean borders, sky-blue accents, light-blue original waveforms, and amber processed waveforms.
@@ -55,12 +55,13 @@ Track Controls is the main sound-editing area for the selected track. It include
 - Assigned sample name, filename, category, and type.
 - Track mode, root note, and octave range for keyboard/chord mode.
 - Original / Processed / Overlay waveform modes.
+- Collapsible **Region** and **Loop Controls** sections with compact `▸` / `▾` header toggles, summaries, spacing, and padding.
 - Region-based sample selection with **Region Start**, **Region End**, and **Region Length** readouts, plus fade, pitch, volume, mute, and solo controls.
 - Fade curve selectors.
 - FX Rack.
 - Preview and render buttons.
 
-The region controls are useful for cutting one hit from a long loop: set **Region Start** near the hit, set **Region End** just after it, and use **Region Length** to confirm the selected duration in milliseconds and seconds. The old trim model remains compatible internally: `startOffsetMs` maps to Region Start and `endTrimMs` maps to `sampleDurationMs - Region End`.
+The collapsible region controls are useful for cutting one hit from a long loop: set **Region Start** near the hit, set **Region End** just after it, and use **Region Length** to confirm the selected duration in milliseconds and seconds. The old trim model remains compatible internally: `startOffsetMs` maps to Region Start and `endTrimMs` maps to `sampleDurationMs - Region End`.
 
 The processed waveform currently approximates the selected region, fade, pitch-length changes, and volume. Full FX waveform rendering is marked as coming soon, but **Preview Track** uses the current track settings and FX chain during playback.
 
@@ -131,11 +132,23 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 9. In Export, export project JSON, import project JSON, and try the current pattern WAV button to see the friendly coming-soon status.
 10. Confirm Guitar Tools is in the left column before Export, minimize/maximize panels, and use Reset Layout.
 
+## Guitar Tools
+
+Guitar Tools is a compact helper in the left column:
+
+- **Chord Helper** with root note and chord type selectors for major, minor, dominant7, major7, minor7, sus2, sus4, diminished, and augmented chords.
+- **Send Chord to Selected Step** writes the current chord notes to the selected sequencer step when the selected track is in Keyboard mode.
+- **Send Root Note to Selected Step** writes a single root note to the selected step.
+- **Fretboard View** shows standard tuning (`E A D G B e`) across 12 frets and highlights the current chord tones.
+- **Tab Scratchpad** provides a simple ASCII tab textarea with Clear Tab and Insert Chord Name buttons.
+
+Known limitation: Guitar Tools does not parse tabs or synthesize guitar audio yet; it only helps choose notes and send them to Keyboard-mode sequencer steps.
+
 ## Playback, Loops, and Rendered Samples
 
-- **Global Stop stops all audio.** The main Stop button now stops the Tone transport, clears sequencer scheduling, stops arrangement playback, and disposes currently playing preview/track players so long previews do not continue in the background.
+- **Global Stop stops all audio and visuals.** The main Stop button now stops the Tone transport, clears sequencer scheduling, stops arrangement playback, disposes currently playing preview/track players, cancels waveform playhead animation frames, and clears the playhead marker so long previews do not continue in the background visually or audibly.
 - **One-shots vs loops.** One-shot samples keep the normal step-trigger behavior. Loop or long samples can use loop controls so a trigger step claims a region instead of retriggering every cycle.
-- **Collapsible Loop Controls.** Track Controls shows Loop Controls as a compact collapsible section with mode, loop length, and sample-length summary. It opens by default for loop or long samples and stays compact for short one-shots.
+- **Collapsible Region and Loop Controls.** Track Controls shows Region and Loop Controls as compact collapsible sections. Region summarizes start/end/length, and Loop Controls summarizes mode, loop length, and sample length. Loop Controls opens by default for loop or long samples and stays compact for short one-shots.
 - **Loop length in steps.** Loop tracks can choose 1, 2, 4, 8, 16, 24, or 32 steps. The sequencer shades the occupied steps after the trigger step. Step duration is based on the current BPM using 16th notes.
 - **Loop retrigger behavior.** Retrigger Loop is off by default to prevent overlapping long loops on the same track. Turning it on stops the previous loop on that track and restarts from the new trigger.
 - **Dynamic sample trim ranges.** The browser decodes sample duration when a sample is previewed, assigned, or selected. Start Offset and End Trim ranges expand to the actual sample length, while Fade In/Out allow up to the shorter of the sample length or 5000 ms. If duration is not loaded yet, the app uses safe fallback ranges.
