@@ -204,6 +204,17 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
   }
 }
 
+export async function triggerSampleRegion({ sample, startMs, endMs, time = Tone.now(), volume = 1, pitchSemitones = 0, fadeInMs = 0, fadeOutMs = 5, effects = [] }: { sample?: Sample; startMs: number; endMs: number; time?: Tone.Unit.Time; volume?: number; pitchSemitones?: number; fadeInMs?: number; fadeOutMs?: number; effects?: TrackEffect[]; }) {
+  if (!sample) return oneShotResult(false, "missing", "Sample file missing or unsupported.");
+  const loaded = await loadSampleAudioBuffer(sample).catch((error) => { throw error; });
+  const durationMs = loaded.audioBuffer.duration * 1000;
+  const start = clamp(startMs, 0, Math.max(0, durationMs - 1));
+  const end = clamp(endMs, start + 1, durationMs);
+  if (end <= start) return oneShotResult(false, "invalid-duration", "Skipped slice: invalid slice duration.");
+  const settings: TrackSettings = { startOffsetMs: start, endTrimMs: Math.max(0, durationMs - end), fadeInMs, fadeOutMs, fadeInCurve: "linear", fadeOutCurve: "linear", volume, mute: false, solo: false, pitchSemitones };
+  return triggerSample(sample, settings, time, effects, (end - start) / 1000);
+}
+
 export async function previewPitchedNotes({ sample, rootNote, notes, mode, bpm, noteDuration, settings, effects }: { sample?: Sample; rootNote: string; notes: string[]; mode: GuitarLabMode; bpm: number; noteDuration: NoteDuration; settings?: Partial<TrackSettings>; effects?: GuitarLabEffects; }): Promise<OneShotResult> {
   if (!sample) return oneShotResult(false, "missing", "Select a source sample to preview or render chords.");
   if (!notes.length) return oneShotResult(false, "missing", "Select at least one note to preview.");

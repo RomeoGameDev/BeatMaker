@@ -2,7 +2,7 @@ export type SampleCategory = "kick" | "snare" | "hat" | "clap" | "perc" | "bass"
 
 export type SampleType = "oneshot" | "loop";
 
-export type TrackMode = "oneshot" | "keyboard";
+export type TrackMode = "oneshot" | "keyboard" | "sliced";
 export type LoopMode = "oneshot" | "loop-region" | "cut-to-step-length" | "play-full" | "fit-to-steps-coming-soon";
 
 export type SequencerStep = {
@@ -10,6 +10,17 @@ export type SequencerStep = {
   note?: string;
   chord?: string;
   notes?: string[];
+};
+
+export type Slice = {
+  id: string;
+  name: string;
+  startMs: number;
+  endMs: number;
+  fadeInMs: number;
+  fadeOutMs: number;
+  attackMs?: number;
+  color?: string;
 };
 
 export type Sample = {
@@ -23,6 +34,7 @@ export type Sample = {
   durationMs?: number;
   isLong?: boolean;
   isRendered?: boolean;
+  isImported?: boolean;
   source?: "in-app" | "public" | "converted" | "indexeddb";
   createdAt?: number;
   metadata?: Record<string, unknown>;
@@ -80,6 +92,8 @@ export type SequencerTrack = {
   name: string;
   assignedSample?: Sample;
   steps: SequencerStep[];
+  slices?: Slice[];
+  sliceSteps?: Record<string, SequencerStep[]>;
   settings: TrackSettings;
   mode: TrackMode;
   rootNote: string;
