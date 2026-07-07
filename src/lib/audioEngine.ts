@@ -3,6 +3,17 @@ import { createToneEffectNodes } from "@/lib/effects";
 import type { Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
+const activePlayers = new Set<Tone.Player>();
+const activeNodes = new Set<Tone.ToneAudioNode>();
+const activeDisposals = new Set<ReturnType<typeof globalThis.setTimeout>>();
+
+function disposeActivePlayer(player: Tone.Player | undefined, nodes: Tone.ToneAudioNode[] = []) {
+  if (!player) return;
+  try { player.stop(); } catch {}
+  try { player.dispose(); } catch {}
+  activePlayers.delete(player);
+  nodes.forEach((node) => { try { node.dispose(); } catch {} activeNodes.delete(node); });
+}
 
 type OneShotStatus =
   | "playing"
@@ -67,7 +78,7 @@ export async function playSample(sample: Sample) {
   }, Tone.now());
 }
 
-export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = []): Promise<OneShotResult> {
+export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = [], maxDurationSeconds?: number): Promise<OneShotResult & { player?: Tone.Player }> {
   if (!sample?.path) {
     const result = oneShotResult(false, "missing", "Sample file missing or unsupported.");
     console.warn(result.message, { sample });
@@ -88,7 +99,7 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     await player.load(sample.path);
 
     if (!player.buffer.loaded) {
-      player.dispose();
+      disposeActivePlayer(player);
       const result = oneShotResult(false, "not-loaded", "Sample not loaded yet, try again.");
       console.warn(result.message, { sample });
       return result;
@@ -99,15 +110,16 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     const endTrimSeconds = safeSettings.endTrimMs / 1000;
 
     if (startOffsetSeconds >= bufferDuration) {
-      player.dispose();
+      disposeActivePlayer(player);
       const result = oneShotResult(false, "start-after-end", "Skipped hit: start offset is beyond sample length.");
       console.warn(result.message, { sample, startOffsetSeconds, bufferDuration });
       return result;
     }
 
-    const duration = bufferDuration - startOffsetSeconds - endTrimSeconds;
+    const rawDuration = bufferDuration - startOffsetSeconds - endTrimSeconds;
+    const duration = maxDurationSeconds && maxDurationSeconds > 0 ? Math.min(rawDuration, maxDurationSeconds) : rawDuration;
     if (duration <= 0) {
-      player.dispose();
+      disposeActivePlayer(player);
       const result = oneShotResult(false, "invalid-duration", "Skipped hit: start offset is beyond sample length.");
       console.warn(result.message, { sample, startOffsetSeconds, endTrimSeconds, bufferDuration });
       return result;
@@ -119,7 +131,7 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
       tempNodes.push(...createToneEffectNodes(effects));
       player.chain(...tempNodes, Tone.getDestination());
     } catch (routingError) {
-      tempNodes.forEach((node) => node.dispose());
+      tempNodes.forEach((node) => { try { node.dispose(); } catch {} activeNodes.delete(node); });
       tempNodes = [];
       player.toDestination();
       player.volume.value = safeSettings.volume <= 0 ? -Infinity : Tone.gainToDb(safeSettings.volume);
@@ -131,14 +143,16 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     player.playbackRate = Math.pow(2, safeSettings.pitchSemitones / 12);
 
     const startTime = typeof time === "number" && time < Tone.now() ? Tone.now() : time;
+    activePlayers.add(player);
+    tempNodes.forEach((node) => activeNodes.add(node));
     player.start(startTime, startOffsetSeconds, duration);
     const disposalDelayMs = ((duration / player.playbackRate) + player.fadeOut + 0.25) * 1000;
-    globalThis.setTimeout(() => { player?.dispose(); tempNodes.forEach((node) => node.dispose()); }, Math.max(250, disposalDelayMs));
+    const timeoutId = globalThis.setTimeout(() => { activeDisposals.delete(timeoutId); disposeActivePlayer(player, tempNodes); }, Math.max(250, disposalDelayMs));
+    activeDisposals.add(timeoutId);
 
-    return oneShotResult(true, "playing", "Playing.");
+    return { ...oneShotResult(true, "playing", "Playing."), player };
   } catch (error) {
-    player?.dispose();
-    tempNodes.forEach((node) => node.dispose());
+    disposeActivePlayer(player, tempNodes);
     const result = oneShotResult(false, "error", "Sample file missing or unsupported.");
     console.warn(result.message, { sample, error });
     return result;
@@ -148,6 +162,17 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
 export function stopTransport() {
   Tone.Transport.stop();
   Tone.Transport.cancel();
+}
+
+export function stopAllAudio() {
+  try { Tone.Transport.stop(); } catch {}
+  try { Tone.Transport.cancel(); } catch {}
+  activeDisposals.forEach((id) => { try { globalThis.clearTimeout(id); } catch {} });
+  activeDisposals.clear();
+  Array.from(activePlayers).forEach((player) => disposeActivePlayer(player));
+  activePlayers.clear();
+  Array.from(activeNodes).forEach((node) => { try { node.dispose(); } catch {} });
+  activeNodes.clear();
 }
 
 export { Tone };

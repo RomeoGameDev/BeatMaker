@@ -10,8 +10,9 @@ import StepSequencer, { defaultTrackSettings, makeInitialTracks, makeSteps } fro
 import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
-import { setBpm, startAudio, stopTransport, Tone, playSample, triggerSample } from "@/lib/audioEngine";
+import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, triggerSample } from "@/lib/audioEngine";
 import { downloadBlob, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
+import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
 import { buildChord, semitoneDiff } from "@/lib/musicTheory";
 import { skins } from "@/lib/skins";
 import type { ArrangementSlot, PatternId, Sample, SequencerStep, SequencerTrack, TrackEffect, TrackSettings } from "@/types";
@@ -21,7 +22,8 @@ const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", seq
 type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 const cloneSteps = (steps: SequencerStep[]) => steps.map((step) => ({ ...step, notes: step.notes ? [...step.notes] : undefined }));
 
-export default function HomeClient({ samples }: { samples: Sample[] }) {
+export default function HomeClient({ samples: initialSamples }: { samples: Sample[] }) {
+  const [samples, setSamples] = useState<Sample[]>(initialSamples);
   const [bpm, setBpmState] = useState(105);
   const [status, setStatus] = useState("Ready. Add samples to public/samples to hear audio.");
   const [selectedSkinId, setSelectedSkinId] = useState(skins[0].id);
@@ -44,6 +46,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   const [timeline, setTimeline] = useState<ArrangementSlot[]>(() => Array.from({ length: 16 }, () => ""));
   const [arrangementPlaying, setArrangementPlaying] = useState(false);
   const [playheadMs, setPlayheadMs] = useState<number | undefined>(undefined);
+  const activeLoopPlayersRef = useRef(new Map<number, { player?: Tone.Player; untilStep: number }>());
   const playheadFrameRef = useRef<number | null>(null);
 
   const selectedSkin = useMemo(() => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0], [selectedSkinId]);
@@ -59,8 +62,19 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   }, [tracks]);
   useEffect(() => () => disposeSequencer(), []);
 
+  function applySampleDuration(updated: Sample) {
+    setSamples((old) => old.map((sample) => sample.path === updated.path ? { ...sample, ...updated } : sample));
+    setTracks((old) => old.map((track) => track.assignedSample?.path === updated.path ? { ...track, assignedSample: { ...track.assignedSample, ...updated } } : track));
+  }
+
+  async function ensureDuration(sample: Sample) {
+    try { const meta = await decodeSampleDuration(sample); const updated = { ...sample, ...meta }; applySampleDuration(updated); return updated; }
+    catch (error) { console.warn("Could not decode sample duration.", error); return sample; }
+  }
+
   function assignSample(sample: Sample) {
-    setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: sample } : track));
+    void ensureDuration(sample);
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: sample, loopMode: (sample.type === "loop" || sample.isLong) ? "play-full" : "oneshot", loopLengthSteps: track.loopLengthSteps ?? 16, retriggerLoop: track.retriggerLoop ?? false } : track));
     setStatus(`${sample.name} assigned to Track ${selectedTrackId}.`);
   }
 
@@ -79,7 +93,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
     setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, settings: { ...track.settings, ...settings } } : track));
   }
 
-  function updateTrack(trackId: number, updates: Partial<Pick<SequencerTrack, "mode" | "rootNote" | "octaveRange">>) {
+  function updateTrack(trackId: number, updates: Partial<Pick<SequencerTrack, "mode" | "rootNote" | "octaveRange" | "loopMode" | "loopLengthSteps" | "retriggerLoop">>) {
     setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, ...updates } : track));
   }
   function updateTrackEffects(trackId: number, effects: TrackEffect[]) {
@@ -101,7 +115,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   function addTrack() {
     setTracks((oldTracks) => {
       const nextId = Math.max(0, ...oldTracks.map((track) => track.id)) + 1;
-      const nextTrack = { id: nextId, name: `Track ${nextId}`, assignedSample: undefined, steps: makeSteps(tracksRef.current[0]?.steps.length ?? 16), settings: { ...defaultTrackSettings }, mode: "oneshot" as const, rootNote: "C3", octaveRange: 1, effects: [] };
+      const nextTrack = { id: nextId, name: `Track ${nextId}`, assignedSample: undefined, steps: makeSteps(tracksRef.current[0]?.steps.length ?? 16), settings: { ...defaultTrackSettings }, mode: "oneshot" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false };
       setSelectedTrackId(nextId);
       setSelectedStepIndex(undefined);
       return [...oldTracks, nextTrack];
@@ -123,7 +137,7 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   function resetPlaybackSettings(trackId: number) { updateTrackSettings(trackId, defaultTrackSettings); }
   function clearStepNotes(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((step, index) => selectedStepIndex === undefined || index === selectedStepIndex ? ({ active: step.active }) : step) } : track)); }
   function clearPattern(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: makeSteps(track.steps.length) } : track)); }
-  function resetTrack(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, assignedSample: undefined, steps: makeSteps(track.steps.length), settings: { ...defaultTrackSettings }, mode: "oneshot", rootNote: "C3", octaveRange: 1, effects: [] } : track)); }
+  function resetTrack(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, assignedSample: undefined, steps: makeSteps(track.steps.length), settings: { ...defaultTrackSettings }, mode: "oneshot", rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot", loopLengthSteps: 16, retriggerLoop: false } : track)); }
   function animatePlayhead(track: SequencerTrack) {
     if (playheadFrameRef.current !== null) cancelAnimationFrame(playheadFrameRef.current);
     const start = track.settings.startOffsetMs;
@@ -140,8 +154,11 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
   }
 
   async function previewSample(sample: Sample) {
-    const result = await playSample(sample);
-    setStatus(result.ok ? `Previewing ${sample.name}.` : result.message);
+    stopAllAudio();
+    setStatus("Preview stopped.");
+    const updated = await ensureDuration(sample);
+    const result = await playSample(updated);
+    setStatus(result.ok ? "Preview playing." : result.message);
   }
 
   async function previewTrack(track: SequencerTrack) {
@@ -151,11 +168,12 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
     }
 
     animatePlayhead(track);
-    const result = await triggerSample(track.assignedSample, track.settings, Tone.now(), track.effects);
+    const updated = await ensureDuration(track.assignedSample);
+    const result = await triggerSample(updated, track.settings, Tone.now(), track.effects);
     setStatus(result.ok ? "Playing." : result.message);
   }
 
-  function triggerStep(step: number, time: Tone.Unit.Time) {
+  function triggerStep(step: number, time: Tone.Unit.Time, absoluteStep = step) {
     const activeTracks = tracksRef.current;
     const hasSolo = activeTracks.some((track) => track.settings.solo);
     activeTracks.forEach((track) => {
@@ -172,8 +190,17 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
         return;
       }
       const pitchSemitones = track.mode === "keyboard" ? track.settings.pitchSemitones + semitoneDiff(track.rootNote, stepData.note ?? track.rootNote) : track.settings.pitchSemitones;
+      const isLoop = track.assignedSample.type === "loop" || track.assignedSample.isLong || track.loopMode !== "oneshot";
+      const loopLength = track.loopLengthSteps ?? 16;
+      const activeLoop = activeLoopPlayersRef.current.get(track.id);
+      if (isLoop && activeLoop && activeLoop.untilStep > absoluteStep) {
+        if (!track.retriggerLoop) return;
+        try { activeLoop.player?.stop(); activeLoop.player?.dispose(); } catch {}
+      }
       if (track.id === selectedTrackId) animatePlayhead(track);
-      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects);
+      const regionSeconds = (60 / bpm / 4) * loopLength;
+      const duration = isLoop && (track.loopMode === "cut-to-step-length" || track.loopMode === "loop-region") ? regionSeconds : undefined;
+      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, duration).then((result) => { if (isLoop && result.ok) activeLoopPlayersRef.current.set(track.id, { player: result.player, untilStep: absoluteStep + loopLength }); });
     });
   }
 
@@ -256,23 +283,26 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
 
   function stopSequencer() {
     if (arrangementTimerRef.current !== null) { window.clearTimeout(arrangementTimerRef.current); arrangementTimerRef.current = null; setArrangementPlaying(false); }
-    stopTransport();
+    stopAllAudio();
     disposeSequencer();
+    activeLoopPlayersRef.current.clear();
     setCurrentStep(0);
     setIsPlaying(false);
-    setStatus("Stopped.");
+    setStatus("Stopped all audio.");
   }
 
   async function startSequencer() {
     await startAudio();
     disposeSequencer();
-    stopTransport();
+    stopAllAudio();
     setBpm(bpm);
-    let step = 0;
+    let absoluteStep = 0;
     schedulerIdRef.current = Tone.Transport.scheduleRepeat((time) => {
+      const stepCount = Math.max(1, tracksRef.current[0]?.steps.length ?? 16);
+      const step = absoluteStep % stepCount;
       setCurrentStep(step);
-      triggerStep(step, time);
-      step = (step + 1) % Math.max(1, tracksRef.current[0]?.steps.length ?? 16);
+      triggerStep(step, time, absoluteStep);
+      absoluteStep += 1;
     }, "16n");
     Tone.Transport.start();
     setIsPlaying(true);
@@ -283,15 +313,21 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
     try {
       const blob = await renderTrackDryWav(track);
       const suffix = variant === "dry" ? "dry" : "processed";
-      downloadBlob(blob, `track-${track.id}-${safeFilename(track.assignedSample?.name ?? "sample")}-${suffix}.wav`);
-      setStatus(`Downloaded ${track.name} ${suffix} WAV. FX render is coming soon; this uses trim/fade/pitch/volume.`);
+      const baseName = `${safeFilename(track.assignedSample?.name ?? "sample")}-rendered-${Date.now()}`;
+      const objectUrl = URL.createObjectURL(blob);
+      const rendered = markSampleDuration({ id: `rendered-${Date.now()}`, name: `${track.assignedSample?.name ?? "sample"}_rendered`, filename: `${baseName}.wav`, type: track.assignedSample?.type ?? "oneshot", category: "rendered", path: objectUrl, isRendered: true }, blob.size ? (track.assignedSample?.durationSeconds ?? 0) : 0);
+      setSamples((old) => [rendered, ...old]);
+      if (variant === "dry") downloadBlob(blob, `${baseName}.wav`);
+      setStatus(variant === "dry" ? "Rendered new sample and downloaded WAV. FX rendering into new sample coming soon." : "Rendered new sample in the Sample Library. FX rendering into new sample coming soon.");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not render WAV."); }
   }
 
   function exportProjectJson() {
-    const project = { version: 1, bpm, selectedSkinId, tracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, timeline };
+    const scrubSample = (sample?: Sample) => sample?.isRendered ? { ...sample, path: "", audioUnavailableAfterRefresh: true } : sample;
+    const exportTracks = tracks.map((track) => ({ ...track, assignedSample: scrubSample(track.assignedSample) }));
+    const project = { version: 1, bpm, selectedSkinId, tracks: exportTracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, timeline, renderedSampleWarning: "Rendered in-app audio blobs/object URLs are not persisted after refresh unless downloaded." };
     downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }), "beatmaker-project.json");
-    setStatus("Downloaded project JSON. Samples must still exist locally.");
+    setStatus("Downloaded project JSON. Rendered sample metadata was saved, but blobs must be downloaded to persist audio.");
   }
 
   function importProjectJson(file: File) {
@@ -311,8 +347,8 @@ export default function HomeClient({ samples }: { samples: Sample[] }) {
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
       <div className="workspace-grid">
         <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
-        <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
-        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
+        <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
+        <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
       </div>
     </main>

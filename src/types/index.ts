@@ -1,8 +1,9 @@
-export type SampleCategory = "kick" | "snare" | "hat" | "clap" | "perc" | "bass" | "guitar" | "melody" | "other";
+export type SampleCategory = "kick" | "snare" | "hat" | "clap" | "perc" | "bass" | "guitar" | "melody" | "rendered" | "other";
 
 export type SampleType = "oneshot" | "loop";
 
 export type TrackMode = "oneshot" | "keyboard";
+export type LoopMode = "oneshot" | "loop-region" | "cut-to-step-length" | "play-full" | "fit-to-steps-coming-soon";
 
 export type SequencerStep = {
   active: boolean;
@@ -18,6 +19,10 @@ export type Sample = {
   type: SampleType;
   category: SampleCategory;
   path: string;
+  durationSeconds?: number;
+  durationMs?: number;
+  isLong?: boolean;
+  isRendered?: boolean;
 };
 
 export type Skin = {
@@ -75,6 +80,9 @@ export type SequencerTrack = {
   minNote?: string;
   maxNote?: string;
   effects: TrackEffect[];
+  loopMode: LoopMode;
+  loopLengthSteps: number;
+  retriggerLoop: boolean;
 };
 
 export type PatternId = string;

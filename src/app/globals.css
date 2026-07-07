@@ -134,3 +134,19 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .sequencer-actions { align-items:center; gap:.5rem; }
 .sequencer-actions strong { margin-right:auto; color:var(--color-accent); }
 @media (max-width: 900px) { .left-column, .main-column { min-width:0; } }
+.step.loop-occupied {
+  background: color-mix(in srgb, var(--color-accent) 28%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+  opacity: 0.75;
+}
+.loop-controls {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 0.85rem;
+  background: color-mix(in srgb, var(--color-panel-2, var(--color-panel)) 78%, transparent);
+}
+.warning-text {
+  color: #ffb86b;
+  font-weight: 700;
+  margin: 0.35rem 0;
+}
