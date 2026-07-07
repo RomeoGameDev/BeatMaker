@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import ArrangementPanel from "@/components/ArrangementPanel";
+import ArrangementPanel, { arrangementSlotCounts, type ArrangementSlotCount } from "@/components/ArrangementPanel";
 import ExportPanel from "@/components/ExportPanel";
 import GuitarTools from "@/components/GuitarTools";
 import SampleLibrary from "@/components/SampleLibrary";
@@ -238,13 +238,18 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function pastePattern() { if (!copiedPattern) return; const snapshot = copiedPattern; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: snapshot[track.id] ? cloneSteps(snapshot[track.id]) : makeSteps(track.steps.length) }))); setStatus(`Pasted copied pattern into Pattern ${activePatternRef.current}.`); }
   function changeStepCount(count: number) { if (![4,8,16,24,32].includes(count)) return; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: Array.from({ length: count }, (_, index) => track.steps[index] ? { ...track.steps[index], notes: track.steps[index].notes ? [...track.steps[index].notes] : undefined } : { active: false }) }))); }
 
+  function changeArrangementSlotCount(count: ArrangementSlotCount) {
+    if (!arrangementSlotCounts.includes(count)) return;
+    setTimeline((old) => Array.from({ length: count }, (_, index) => old[index] ?? ""));
+  }
+
   function cycleTimelineSlot(index: number) {
     const cycle: ArrangementSlot[] = ["", ...availablePatterns];
     setTimeline((old) => old.map((slot, i) => i === index ? cycle[(cycle.indexOf(slot) + 1) % cycle.length] : slot));
   }
 
   async function playArrangement() {
-    const slots = timeline as PatternId[];
+    const slots = timeline.slice(0, timeline.length) as PatternId[];
     if (!slots.length) { setStatus("Add pattern blocks to the arrangement timeline first."); return; }
     stopSequencer();
     await startAudio();
@@ -325,14 +330,14 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function exportProjectJson() {
     const scrubSample = (sample?: Sample) => sample?.isRendered ? { ...sample, path: "", audioUnavailableAfterRefresh: true } : sample;
     const exportTracks = tracks.map((track) => ({ ...track, assignedSample: scrubSample(track.assignedSample) }));
-    const project = { version: 1, bpm, selectedSkinId, tracks: exportTracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, timeline, renderedSampleWarning: "Rendered in-app audio blobs/object URLs are not persisted after refresh unless downloaded." };
+    const project = { version: 1, bpm, selectedSkinId, tracks: exportTracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, arrangementSlotCount: timeline.length, timeline, renderedSampleWarning: "Rendered in-app audio blobs/object URLs are not persisted after refresh unless downloaded." };
     downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }), "beatmaker-project.json");
     setStatus("Downloaded project JSON. Rendered sample metadata was saved, but blobs must be downloaded to persist audio.");
   }
 
   function importProjectJson(file: File) {
     const reader = new FileReader();
-    reader.onload = () => { try { const project = JSON.parse(String(reader.result)); setBpmState(project.bpm ?? bpm); setSelectedSkinId(project.selectedSkinId ?? selectedSkinId); setAvailablePatterns(project.availablePatterns ?? ["A"]); setPatterns(project.patterns ?? { A: {} }); setTimeline(project.timeline ?? Array.from({ length: 16 }, () => "")); if (project.tracks) setTracks(project.tracks); setActivePattern(project.activePattern ?? "A"); setStatus("Imported project JSON. Audio files are referenced by local sample paths."); } catch { setStatus("Could not import project JSON."); } };
+    reader.onload = () => { try { const project = JSON.parse(String(reader.result)); setBpmState(project.bpm ?? bpm); setSelectedSkinId(project.selectedSkinId ?? selectedSkinId); setAvailablePatterns(project.availablePatterns ?? ["A"]); setPatterns(project.patterns ?? { A: {} }); setTimeline(Array.from({ length: project.arrangementSlotCount && arrangementSlotCounts.includes(project.arrangementSlotCount) ? project.arrangementSlotCount : (project.timeline?.length ?? 16) }, (_, index) => project.timeline?.[index] ?? "")); if (project.tracks) setTracks(project.tracks); setActivePattern(project.activePattern ?? "A"); setStatus("Imported project JSON. Audio files are referenced by local sample paths."); } catch { setStatus("Could not import project JSON."); } };
     reader.readAsText(file);
   }
 
@@ -349,7 +354,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
         <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
         <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
         <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
-        <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
+        <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
       </div>
     </main>
   );
