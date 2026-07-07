@@ -23,7 +23,8 @@ export type Sample = {
   durationMs?: number;
   isLong?: boolean;
   isRendered?: boolean;
-  source?: "in-app" | "public";
+  source?: "in-app" | "public" | "converted";
+  originalPath?: string;
   normalizedPath?: string;
   loadStatus?: import("@/lib/sampleLoader").SampleLoadStatus;
   lastErrorMessage?: string;

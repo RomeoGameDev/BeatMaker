@@ -149,7 +149,7 @@ Chord mode writes the selected notes to the selected Keyboard-mode step. Riff mo
 
 Rendered Guitar Lab samples appear in Sample Library immediately during the current session and can be previewed or assigned like other rendered samples. Browser limitation: the app cannot write generated files into `public/samples` without a backend. Use **Render + Download WAV** to keep a permanent copy, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
 
-The Tab Scratchpad remains intentionally simple: it can insert selected notes as comments, insert the current chord name, clear the text, and copy the tab to the clipboard. It does not parse full tablature yet.
+The old manual Tab Scratchpad is now a collapsed **Generated Tab** output area. It generates copyable ASCII tab from selected fretboard notes or riffs instead of acting as the main tab editor.
 
 ## Playback, Loops, and Rendered Samples
 
@@ -187,9 +187,40 @@ For example, if `public/samples/oneshots/kick01.wav` is decode-failed but `kick0
 
 - Guitar Tools now uses one shared selected-notes state for both the fretboard and piano keyboard, so selecting a note in either view highlights it in both places where that exact note appears.
 - The fretboard is a compact visual helper with fret numbers 0–12, single marker dots on frets 3, 5, 7, and 9, and a double marker at fret 12. Open strings use a distinct nut/open-string style.
-- The Tab Scratchpad is a collapsed utility by default and keeps simple Clear Tab, Insert Chord Name, and Copy Tab to Clipboard actions.
+- The Generated Tab section is collapsed by default and provides Generate from Selected Notes, Generate from Riff, Copy, and Clear actions.
 - Sample Library audio-file debug details are hidden by default after refresh and can be opened with the Show debug toggle.
 - Rendered/in-app samples are marked as removable and can be removed from the in-memory Sample Library. Object URLs are revoked when removed.
 - Physical files in `public/samples` cannot be deleted from the browser without a backend; remove those from disk manually.
 - The workspace includes Compact Left, Balanced, and Wide Left layout modes, persisted in localStorage, to make the left Guitar Tools column easier to work with.
 
+
+## Generated Tab workflow
+
+Guitar Tools includes a collapsed-by-default **Generated Tab** section. It is output-only: select notes by clicking fretboard cells, then use **Generate Tab from Selected Notes** for a chord-style vertical stack or **Generate Tab from Riff** for sequential notes across the strings. Use **Copy Tab to Clipboard** to copy the ASCII tab. If you only click piano keys, the app asks you to select fretboard positions first so it can preserve exact string/fret choices.
+
+## Browser PCM WAV conversion workflow
+
+When a sample is found but WebAudio cannot decode it, Sample Library keeps the manual helper command visible and also shows **Try Convert to PCM WAV** plus **Convert + Download PCM WAV**. Conversion lazy-loads ffmpeg.wasm only after you click the button; it is not loaded at app startup. Successful conversion creates a new in-memory sample with a `converted-<timestamp>` id, `_pcm.wav` filename, the original type/category, and a blob URL path so you can preview, assign, and remove it from the in-app library.
+
+Limitations:
+
+- Converted audio is in memory until downloaded.
+- The browser cannot delete or overwrite old files in `public/samples` without a backend.
+- To permanently use a converted sample, download it and place the WAV in `public/samples/oneshots/` or `public/samples/loops/`.
+- If ffmpeg.wasm cannot load or convert the file, the app shows a friendly failure status and the manual `ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav` workflow remains available.
+
+## Export / Import workflow
+
+The Export panel now has no dead buttons:
+
+- **Export Project JSON** downloads a JSON project containing tracks, patterns, arrangement slots and slot count, BPM, selected theme id, step count, track/FX settings, chord/note data, sample references, and rendered/converted sample metadata when available.
+- **Import Project JSON** safely reads a JSON project and restores BPM, theme, tracks, patterns, and arrangement data. Missing sample references warn through status text instead of crashing.
+- **Export Current Pattern WAV** renders the active pattern dry in the browser and downloads `dusty-current-pattern.wav` using current BPM, pattern steps, tracks, sample regions, volume, and pitch. FX export is still coming soon, so the status says the pattern was exported dry.
+- **Export Arrangement WAV** and **Export Stems ZIP** currently show clear coming-soon statuses rather than silently doing nothing.
+
+Export limitations:
+
+- Project JSON does not embed huge audio blobs.
+- Rendered and converted in-memory audio is not persisted after refresh unless downloaded.
+- FX may not render into exported WAVs yet.
+- Arrangement WAV and Stems ZIP export are currently coming soon.

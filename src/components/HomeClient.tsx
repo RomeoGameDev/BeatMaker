@@ -11,7 +11,7 @@ import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
 import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample } from "@/lib/audioEngine";
-import { downloadBlob, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
+import { downloadBlob, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
 import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
 import { buildChord, semitoneDiff } from "@/lib/musicTheory";
@@ -143,7 +143,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }
 
   function removeSample(sample: Sample) {
-    if (!(sample.isRendered || sample.source === "in-app")) { setStatus("Physical samples must be removed from public/samples manually."); return; }
+    if (!(sample.isRendered || sample.source === "in-app" || sample.source === "converted")) { setStatus("Physical samples must be removed from public/samples manually."); return; }
     if (sample.path.startsWith("blob:")) URL.revokeObjectURL(sample.path);
     setSamples((old) => old.filter((item) => item.id !== sample.id));
     let wasAssigned = false;
@@ -380,17 +380,56 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not render WAV."); }
   }
 
+  async function convertSampleToPcmWav(sample: Sample, download = false) {
+    setStatus("Conversion started. Loading converter...");
+    try {
+      const response = await fetch(sample.path);
+      if (!response.ok) throw new Error("Could not fetch sample for conversion.");
+      const input = new Uint8Array(await response.arrayBuffer());
+      try {
+        // Lazy-load ffmpeg.wasm from a browser ESM CDN only after the user asks to convert.
+        const [{ FFmpeg }, { fetchFile }] = await Promise.all([(new Function("u", "return import(u)"))("https://esm.sh/@ffmpeg/ffmpeg@0.12.10"), (new Function("u", "return import(u)"))("https://esm.sh/@ffmpeg/util@0.12.1")]) as any;
+        setStatus("Converting...");
+        const ffmpeg = new FFmpeg();
+        await ffmpeg.load();
+        await ffmpeg.writeFile(sample.filename || "input.wav", await fetchFile(new Blob([input])));
+        await ffmpeg.exec(["-i", sample.filename || "input.wav", "-acodec", "pcm_s16le", "-ar", "44100", "output.wav"]);
+        const data = await ffmpeg.readFile("output.wav");
+        const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
+        const wavBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+        const blob = new Blob([wavBuffer], { type: "audio/wav" });
+        const timestamp = Date.now();
+        const name = `${safeFilename(sample.name)}_pcm`;
+        const converted = markSampleDuration({ id: `converted-${timestamp}`, name, filename: `${name}.wav`, type: sample.type, category: sample.category, path: URL.createObjectURL(blob), isRendered: true, source: "converted", originalPath: sample.path }, 0);
+        setSamples((old) => [converted, ...old]);
+        if (download) downloadBlob(blob, converted.filename);
+        setStatus("Conversion complete.");
+      } catch (ffmpegError) {
+        console.warn("ffmpeg.wasm conversion failed; preserving manual workflow.", ffmpegError);
+        throw new Error("Conversion failed. Browser converter could not load or process this file; use the manual ffmpeg command shown in the sample row.");
+      }
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Conversion failed."); }
+  }
+
+  async function exportCurrentPatternWav() {
+    try {
+      const blob = await renderPatternDryWav(tracksRef.current, bpm);
+      downloadBlob(blob, "dusty-current-pattern.wav");
+      setStatus("Pattern WAV exported. FX export coming soon; exported dry pattern.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Export render failed."); }
+  }
+
   function exportProjectJson() {
     const scrubSample = (sample?: Sample) => sample?.isRendered ? { ...sample, path: "", audioUnavailableAfterRefresh: true } : sample;
     const exportTracks = tracks.map((track) => ({ ...track, assignedSample: scrubSample(track.assignedSample) }));
-    const project = { version: 1, bpm, selectedSkinId, tracks: exportTracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, arrangementSlotCount: timeline.length, timeline, renderedSampleWarning: "Rendered in-app audio blobs/object URLs are not persisted after refresh unless downloaded." };
+    const project = { version: 1, bpm, selectedSkinId, tracks: exportTracks, patterns: { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) }, availablePatterns, activePattern, arrangementSlotCount: timeline.length, timeline, stepCountPerPattern: tracksRef.current[0]?.steps.length ?? 16, sampleReferences: tracksRef.current.map((track) => track.assignedSample ? { trackId: track.id, name: track.assignedSample.name, path: track.assignedSample.path } : undefined).filter(Boolean), renderedSampleWarning: "Rendered or converted in-app audio blobs/object URLs are not persisted after refresh unless downloaded." };
     downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }), "beatmaker-project.json");
-    setStatus("Downloaded project JSON. Rendered sample metadata was saved, but blobs must be downloaded to persist audio.");
+    setStatus("Project JSON exported. Rendered/converted sample metadata was saved, but blobs must be downloaded to persist audio.");
   }
 
   function importProjectJson(file: File) {
     const reader = new FileReader();
-    reader.onload = () => { try { const project = JSON.parse(String(reader.result)); setBpmState(project.bpm ?? bpm); setSelectedSkinId(project.selectedSkinId ?? selectedSkinId); setAvailablePatterns(project.availablePatterns ?? ["A"]); setPatterns(project.patterns ?? { A: {} }); setTimeline(Array.from({ length: project.arrangementSlotCount && arrangementSlotCounts.includes(project.arrangementSlotCount) ? project.arrangementSlotCount : (project.timeline?.length ?? 16) }, (_, index) => project.timeline?.[index] ?? "")); if (project.tracks) setTracks(project.tracks); setActivePattern(project.activePattern ?? "A"); setStatus("Imported project JSON. Audio files are referenced by local sample paths."); } catch { setStatus("Could not import project JSON."); } };
+    reader.onload = () => { try { const project = JSON.parse(String(reader.result)); setBpmState(project.bpm ?? bpm); setSelectedSkinId(project.selectedSkinId ?? selectedSkinId); setAvailablePatterns(project.availablePatterns ?? ["A"]); setPatterns(project.patterns ?? { A: {} }); setTimeline(Array.from({ length: project.arrangementSlotCount && arrangementSlotCounts.includes(project.arrangementSlotCount) ? project.arrangementSlotCount : (project.timeline?.length ?? 16) }, (_, index) => project.timeline?.[index] ?? "")); if (project.tracks) setTracks(project.tracks); setActivePattern(project.activePattern ?? "A"); setStatus("Project imported. Audio files are referenced by local sample paths; missing samples are skipped safely."); } catch { setStatus("Could not import project JSON."); } };
     reader.readAsText(file);
   }
 
@@ -405,7 +444,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
       <div className="layout-mode-control"><span>Layout:</span><button className={layoutMode === "compact" ? "active-filter" : ""} onClick={() => setLayoutMode("compact")}>Compact Left</button><button className={layoutMode === "balanced" ? "active-filter" : ""} onClick={() => setLayoutMode("balanced")}>Balanced</button><button className={layoutMode === "wide" ? "active-filter" : ""} onClick={() => setLayoutMode("wide")}>Wide Left</button></div>
       <div className={`workspace-grid layout-${layoutMode}`}>
-        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} onRemove={removeSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={(sample) => setSamples((old) => [sample, ...old])} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
+        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} onRemove={removeSample} onConvert={convertSampleToPcmWav} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={(sample) => setSamples((old) => [sample, ...old])} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} onExportArrangementWav={() => setStatus("Arrangement export coming soon.")} onExportStemsZip={() => setStatus("Stems ZIP export coming soon.")} /></WindowPanel></div>
         <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
         <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
