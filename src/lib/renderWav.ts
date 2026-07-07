@@ -64,6 +64,47 @@ export async function renderTrackDryWav(track: SequencerTrack) {
   return encodeWav(output, rate);
 }
 
+export async function renderPatternDryWav(tracks: SequencerTrack[], bpm: number) {
+  const stepCount = Math.max(1, ...tracks.map((track) => track.steps.length || 0));
+  const sampleRate = 44100;
+  const stepSeconds = 60 / Math.max(1, bpm) / 4;
+  const output = new Float32Array(Math.ceil((stepCount * stepSeconds + 8) * sampleRate));
+  for (const track of tracks) {
+    if (!track.assignedSample || track.settings.mute) continue;
+    let buffer: AudioBuffer;
+    try {
+      const response = await fetch(track.assignedSample.path);
+      if (!response.ok) continue;
+      const context = new OfflineAudioContext(1, 1, sampleRate);
+      buffer = await context.decodeAudioData(await response.arrayBuffer());
+    } catch { continue; }
+    for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
+      const step = track.steps[stepIndex];
+      if (!step?.active) continue;
+      const startOut = Math.floor(stepIndex * stepSeconds * sampleRate);
+      const pitchRate = Math.pow(2, clamp(track.settings.pitchSemitones, -24, 24) / 12);
+      const start = Math.floor(clamp(track.settings.startOffsetMs / 1000, 0, buffer.duration) * buffer.sampleRate);
+      const end = Math.max(start, buffer.length - Math.floor(clamp(track.settings.endTrimMs / 1000, 0, buffer.duration) * buffer.sampleRate));
+      const length = Math.ceil((end - start) / pitchRate);
+      for (let index = 0; index < length && startOut + index < output.length; index += 1) {
+        const sourceIndex = start + index * pitchRate;
+        const left = Math.floor(sourceIndex);
+        const frac = sourceIndex - left;
+        let mixed = 0;
+        for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+          const data = buffer.getChannelData(channel);
+          mixed += ((data[left] ?? 0) * (1 - frac)) + ((data[left + 1] ?? 0) * frac);
+        }
+        mixed = (mixed / Math.max(1, buffer.numberOfChannels)) * clamp(track.settings.volume, 0, 1.5);
+        output[startOut + index] = clamp((output[startOut + index] ?? 0) + mixed, -1, 1);
+      }
+    }
+  }
+  let last = output.length - 1;
+  while (last > 0 && Math.abs(output[last]) < 0.0001) last -= 1;
+  return encodeWav(output.slice(0, Math.max(sampleRate, last + 1)), sampleRate);
+}
+
 export async function renderPitchedNotesWav({ sample, rootNote, notes, mode, bpm, noteDuration, volume = 1, pitchOffsetSemitones = 0 }: { sample: { path: string }; rootNote: string; notes: string[]; mode: "chord" | "riff"; bpm: number; noteDuration: "1/4" | "1/8" | "1/16"; volume?: number; pitchOffsetSemitones?: number; }) {
   const { loadSampleAudioBuffer } = await import("@/lib/sampleLoader");
   const { semitoneDiff } = await import("@/lib/musicTheory");

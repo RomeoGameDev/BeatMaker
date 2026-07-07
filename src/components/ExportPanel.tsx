@@ -3,14 +3,16 @@ import type { ChangeEvent } from "react";
 type Props = {
   onExportProject: () => void;
   onImportProject: (file: File) => void;
-  onComingSoon: (feature: string) => void;
+  onExportPatternWav: () => void;
+  onExportArrangementWav: () => void;
+  onExportStemsZip: () => void;
 };
 
-export default function ExportPanel({ onExportProject, onImportProject, onComingSoon }: Props) {
+export default function ExportPanel({ onExportProject, onImportProject, onExportPatternWav, onExportArrangementWav, onExportStemsZip }: Props) {
   const importJson = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) onImportProject(file);
     event.target.value = "";
   };
-  return <div className="export-panel"><button type="button" onClick={() => onComingSoon("current pattern WAV export")}>Export Current Pattern WAV</button><button type="button" onClick={() => onComingSoon("arrangement WAV export")}>Export Arrangement WAV (coming soon)</button><button type="button" onClick={() => onComingSoon("stems ZIP export")}>Export Stems ZIP (coming soon)</button><button type="button" onClick={onExportProject}>Export Project JSON</button><label className="import-button">Import Project JSON<input type="file" accept="application/json,.json" onChange={importJson} /></label><p className="hint">Project JSON stores tracks, patterns, arrangement, BPM, theme, and rendered sample metadata. Rendered in-app samples are saved in Project JSON metadata, but audio blobs/object URLs are not persisted after refresh unless downloaded.</p></div>;
+  return <div className="export-panel"><button type="button" onClick={onExportPatternWav}>Export Current Pattern WAV</button><button type="button" onClick={onExportArrangementWav}>Export Arrangement WAV</button><button type="button" onClick={onExportStemsZip}>Export Stems ZIP</button><button type="button" onClick={onExportProject}>Export Project JSON</button><label className="import-button">Import Project JSON<input type="file" accept="application/json,.json" onChange={importJson} /></label><p className="hint">Every export button now downloads a file or reports a clear status. Project JSON stores tracks, patterns, arrangement, BPM, theme, FX/settings, note/chord data, sample references, and rendered/converted sample metadata; large audio blobs are not embedded.</p></div>;
 }
