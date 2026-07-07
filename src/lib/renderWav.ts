@@ -7,7 +7,7 @@ function curvePoint(curve: TrackSettings["fadeInCurve"], t: number) {
   return curve === "easeIn" ? t * t : curve === "easeOut" ? 1 - (1 - t) * (1 - t) : curve === "exponential" ? Math.pow(t, 3) : t;
 }
 
-function encodeWav(samples: Float32Array, sampleRate: number) {
+export function encodeWav(samples: Float32Array, sampleRate: number) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   const write = (offset: number, text: string) => Array.from(text).forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
@@ -62,4 +62,36 @@ export async function renderTrackDryWav(track: SequencerTrack) {
     output[index] = mixed * Math.min(fadeIn, fadeOut) * clamp(track.settings.volume, 0, 1.5);
   }
   return encodeWav(output, rate);
+}
+
+export async function renderPitchedNotesWav({ sample, rootNote, notes, mode, bpm, noteDuration, volume = 1, pitchOffsetSemitones = 0 }: { sample: { path: string }; rootNote: string; notes: string[]; mode: "chord" | "riff"; bpm: number; noteDuration: "1/4" | "1/8" | "1/16"; volume?: number; pitchOffsetSemitones?: number; }) {
+  const { loadSampleAudioBuffer } = await import("@/lib/sampleLoader");
+  const { semitoneDiff } = await import("@/lib/musicTheory");
+  const loaded = await loadSampleAudioBuffer(sample as never);
+  const sourceBuffer = loaded.audioBuffer;
+  const rate = sourceBuffer.sampleRate;
+  const stepSeconds = (60 / Math.max(1, bpm)) * ({ "1/4": 1, "1/8": 0.5, "1/16": 0.25 }[noteDuration] ?? 0.5);
+  const starts = notes.map((_, index) => mode === "riff" ? index * stepSeconds : 0);
+  const renderedLengths = notes.map((note) => Math.ceil(sourceBuffer.length / Math.pow(2, (semitoneDiff(rootNote, note) + pitchOffsetSemitones) / 12)));
+  const outputLength = Math.max(1, ...renderedLengths.map((length, index) => Math.ceil(starts[index] * rate) + length));
+  const output = new Float32Array(outputLength);
+  notes.forEach((note, noteIndex) => {
+    const pitchRate = Math.pow(2, (semitoneDiff(rootNote, note) + pitchOffsetSemitones) / 12);
+    const startSample = Math.floor(starts[noteIndex] * rate);
+    const length = renderedLengths[noteIndex];
+    for (let index = 0; index < length; index += 1) {
+      const sourceIndex = index * pitchRate;
+      const left = Math.floor(sourceIndex);
+      const frac = sourceIndex - left;
+      let mixed = 0;
+      for (let channel = 0; channel < sourceBuffer.numberOfChannels; channel += 1) {
+        const data = sourceBuffer.getChannelData(channel);
+        mixed += ((data[left] ?? 0) * (1 - frac)) + ((data[left + 1] ?? 0) * frac);
+      }
+      mixed /= Math.max(1, sourceBuffer.numberOfChannels);
+      const fade = Math.min(1, index / Math.max(1, rate * 0.01), (length - index) / Math.max(1, rate * 0.02));
+      output[startSample + index] = clamp((output[startSample + index] ?? 0) + mixed * fade * volume / Math.max(1, mode === "chord" ? notes.length * 0.7 : 1), -1, 1);
+    }
+  });
+  return { blob: encodeWav(output, rate), durationSeconds: output.length / rate };
 }

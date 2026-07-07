@@ -134,15 +134,22 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 
 ## Guitar Tools
 
-Guitar Tools is a compact helper in the left column:
+Guitar Tools is now an independent **Guitar / Chord / Riff Lab** in the left column. It does not change the selected Track Controls sample when you choose a Guitar Tools source sample.
 
-- **Chord Helper** with root note and chord type selectors for major, minor, dominant7, major7, minor7, sus2, sus4, diminished, and augmented chords.
-- **Send Chord to Selected Step** writes the current chord notes to the selected sequencer step when the selected track is in Keyboard mode.
-- **Send Root Note to Selected Step** writes a single root note to the selected step.
-- **Fretboard View** shows standard tuning (`E A D G B e`) across 12 frets and highlights the current chord tones.
-- **Tab Scratchpad** provides a simple ASCII tab textarea with Clear Tab and Insert Chord Name buttons.
+Workflow:
 
-Known limitation: Guitar Tools does not parse tabs or synthesize guitar audio yet; it only helps choose notes and send them to Keyboard-mode sequencer steps.
+1. Select a **Source Sample** from discovered one-shots, loops, or rendered in-app samples.
+2. Choose **Chord** mode for simultaneous notes or **Riff** mode for notes played in order.
+3. Click notes on the compact piano or toggle cells on the 0-12 fret standard-tuning fretboard (`E A D G B e`).
+4. Preview selected notes, the Chord Helper chord, or the root note using the source sample and current app BPM.
+5. Add optional **Guitar Lab FX**. Preview supports safe mini FX routing where available; render currently applies volume and pitch offset, with time/modulation FX marked as TODO/bypass.
+6. Render to a new in-app sample, render and download a WAV, or send the chord/riff to the selected sequencer step.
+
+Chord mode writes the selected notes to the selected Keyboard-mode step. Riff mode writes notes across consecutive steps and stops at the last available step if it would overflow. If the selected track is not in Keyboard mode, Guitar Tools prompts you to switch modes first.
+
+Rendered Guitar Lab samples appear in Sample Library immediately during the current session and can be previewed or assigned like other rendered samples. Browser limitation: the app cannot write generated files into `public/samples` without a backend. Use **Render + Download WAV** to keep a permanent copy, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
+
+The Tab Scratchpad remains intentionally simple: it can insert selected notes as comments, insert the current chord name, clear the text, and copy the tab to the clipboard. It does not parse full tablature yet.
 
 ## Playback, Loops, and Rendered Samples
 

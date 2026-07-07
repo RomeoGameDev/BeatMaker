@@ -1,51 +1,51 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { buildChord, CHORD_TYPES, CHROMATIC_NOTES, formatChordLabel, midiToNote, noteToMidi, type ChordType } from "@/lib/musicTheory";
-import type { SequencerTrack } from "@/types";
+import { useMemo, useState, type ReactNode } from "react";
+import { playHtmlAudioFallback, previewPitchedNotes } from "@/lib/audioEngine";
+import { downloadBlob, renderPitchedNotesWav, safeFilename } from "@/lib/renderWav";
+import { markSampleDuration } from "@/lib/sampleDuration";
+import { buildChord, buildNoteRange, CHORD_TYPES, CHROMATIC_NOTES, formatChordLabel, midiToNote, noteToMidi, type ChordType } from "@/lib/musicTheory";
+import type { GuitarLabEffects, GuitarLabMode, NoteDuration, Sample, SequencerTrack } from "@/types";
 
-type Props = {
-  track?: SequencerTrack;
-  selectedStepIndex?: number;
-  onStepNotesChange: (trackId: number, stepIndex: number, notes: string[]) => void;
-};
-
-const rootNotes = CHROMATIC_NOTES;
+type FretNote = { stringIndex: number; fret: number; note: string; midi: number };
+type Props = { samples: Sample[]; bpm: number; track?: SequencerTrack; selectedStepIndex?: number; onStepNotesChange: (trackId: number, stepIndex: number, notes: string[]) => void; onAddRenderedSample: (sample: Sample) => void; onStatus: (message: string) => void; };
 const standardTuning = ["E2", "A2", "D3", "G3", "B3", "E4"];
 const stripOctave = (note: string) => note.replace(/-?\d+$/, "");
+const defaultFx: GuitarLabEffects = { volume: 1, pitchOffsetSemitones: 0, reverbWet: 0, delayWet: 0, drive: 0, chorusWet: 0 };
+function Section({ title, children }: { title: string; children: ReactNode }) { const [open, setOpen] = useState(true); return <section className="guitar-tool-section"><button className="collapse-title" type="button" onClick={() => setOpen(!open)}>{open ? "▾" : "▸"} {title}</button>{open ? children : null}</section>; }
 
-export default function GuitarTools({ track, selectedStepIndex, onStepNotesChange }: Props) {
+export default function GuitarTools({ samples, bpm, track, selectedStepIndex, onStepNotesChange, onAddRenderedSample, onStatus }: Props) {
+  const [sourceId, setSourceId] = useState("");
+  const [mode, setMode] = useState<GuitarLabMode>("chord");
+  const [noteDuration, setNoteDuration] = useState<NoteDuration>("1/8");
   const [root, setRoot] = useState("G");
+  const [octave, setOctave] = useState(3);
   const [chordType, setChordType] = useState<ChordType>("major");
+  const [selectedFrets, setSelectedFrets] = useState<FretNote[]>([]);
+  const [pianoNotes, setPianoNotes] = useState<string[]>([]);
+  const [fx, setFx] = useState<GuitarLabEffects>(defaultFx);
   const [tab, setTab] = useState(`e|----------------|\nB|----------------|\nG|----------------|\nD|----------------|\nA|----------------|\nE|----------------|`);
-  const chordNotes = useMemo(() => buildChord(`${root}3`, chordType), [root, chordType]);
-  const chordPitchClasses = new Set(chordNotes.map(stripOctave));
+  const source = samples.find((sample) => sample.id === sourceId);
+  const chordNotes = useMemo(() => buildChord(`${root}${octave}`, chordType), [root, octave, chordType]);
+  const allNotes = selectedFrets.length ? selectedFrets.map((item) => item.note) : pianoNotes;
+  const playableNotes = allNotes.length ? allNotes : chordNotes;
+  const rootNote = `${root}${octave}`;
   const canSend = Boolean(track && track.mode === "keyboard" && selectedStepIndex !== undefined);
-  const message = track?.mode !== "keyboard" ? "Switch selected track to Keyboard mode to send chords." : selectedStepIndex === undefined ? "Select a sequencer step to send notes." : "Ready to send to the selected step.";
-
-  const sendNotes = (notes: string[]) => {
-    if (!track || selectedStepIndex === undefined || track.mode !== "keyboard") return;
-    onStepNotesChange(track.id, selectedStepIndex, notes);
-  };
-
-  return <div className="guitar-tools">
-    <section className="guitar-tool-section">
-      <p className="eyebrow">Chord Helper</p>
-      <div className="control-grid compact-grid"><label>Root<select value={root} onChange={(event) => setRoot(event.target.value)}>{rootNotes.map((note) => <option key={note} value={note}>{note}</option>)}</select></label><label>Chord Type<select value={chordType} onChange={(event) => setChordType(event.target.value as ChordType)}>{CHORD_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label></div>
-      <p className="chord-preview"><strong>{root} {chordType}</strong> = {chordNotes.map(stripOctave).join(" ")}</p>
-      <p className="hint">{message}</p>
-      <div className="nudge-row"><button type="button" disabled={!canSend} onClick={() => sendNotes(chordNotes)}>Send Chord to Selected Step</button><button type="button" disabled={!canSend} onClick={() => sendNotes([`${root}3`])}>Send Root Note to Selected Step</button></div>
-    </section>
-    <section className="guitar-tool-section">
-      <p className="eyebrow">Fretboard · Standard E A D G B e</p>
-      <div className="fretboard" role="img" aria-label={`${formatChordLabel(`${root}3`, chordType)} notes on a 12 fret guitar fretboard`}>
-        {standardTuning.slice().reverse().map((openNote) => <div className="fret-string" key={openNote}><span className="string-name">{stripOctave(openNote)}</span>{Array.from({ length: 13 }, (_, fret) => { const note = midiToNote(noteToMidi(openNote) + fret); const noteName = stripOctave(note); const active = chordPitchClasses.has(noteName); return <span key={`${openNote}-${fret}`} className={`fret ${active ? "active" : ""}`}>{active ? noteName : fret === 0 ? "0" : ""}</span>; })}</div>)}
-      </div>
-    </section>
-    <section className="guitar-tool-section">
-      <p className="eyebrow">Tab Scratchpad</p>
-      <textarea className="tab-scratchpad" value={tab} onChange={(event) => setTab(event.target.value)} rows={6} spellCheck={false} />
-      <div className="nudge-row"><button type="button" onClick={() => setTab("")}>Clear Tab</button><button type="button" onClick={() => setTab((old) => `${old}${old ? "\n" : ""}${root} ${chordType} (${chordNotes.map(stripOctave).join(" ")})`)}>Insert Chord Name</button></div>
-    </section>
+  const fretKey = (stringIndex: number, fret: number) => `${stringIndex}:${fret}`;
+  const selectedFretKeys = new Set(selectedFrets.map((item) => fretKey(item.stringIndex, item.fret)));
+  const chordPitchClasses = new Set(chordNotes.map(stripOctave));
+  const sourceWarning = source?.loadStatus === "decode failed" ? "This sample cannot be pitch-rendered until converted to PCM WAV." : undefined;
+  async function preview(notes = playableNotes) { if (!source) { onStatus("Select a source sample to preview or render chords."); return; } const result = await previewPitchedNotes({ sample: source, rootNote, notes, mode, bpm, noteDuration, effects: fx }); if (result.status === "decode-failed") { await playHtmlAudioFallback(source); onStatus(sourceWarning ?? result.message); } else onStatus(result.message); }
+  async function render(notes = playableNotes, download = false) { if (!source) { onStatus("Select a source sample to preview or render chords."); return; } try { const rendered = await renderPitchedNotesWav({ sample: source, rootNote, notes, mode, bpm, noteDuration, volume: fx.volume, pitchOffsetSemitones: fx.pitchOffsetSemitones }); const timestamp = Date.now(); const notesName = notes.map(stripOctave).join("-").toLowerCase() || timestamp; const name = mode === "chord" ? `guitar_chord_${notesName}` : `guitar_riff_${timestamp}`; const filename = `${safeFilename(name)}.wav`; const objectUrl = URL.createObjectURL(rendered.blob); onAddRenderedSample(markSampleDuration({ id: `guitar-render-${timestamp}`, name, filename, type: rendered.durationSeconds > 2 ? "loop" : "oneshot", category: "guitar", path: objectUrl, isRendered: true }, rendered.durationSeconds)); if (download) downloadBlob(rendered.blob, filename); onStatus(download ? "Rendered Guitar Lab sample and downloaded WAV. FX render is volume/pitch only for now." : "Rendered Guitar Lab sample into the Sample Library. FX render is volume/pitch only for now."); } catch (error) { onStatus(error instanceof Error ? error.message : "Could not render Guitar Lab WAV."); } }
+  function send(notes = playableNotes) { if (!track || selectedStepIndex === undefined || track.mode !== "keyboard") { onStatus("Switch selected track to Keyboard mode to send notes."); return; } if (mode === "chord") onStepNotesChange(track.id, selectedStepIndex, notes); else { let overflow = false; notes.forEach((note, index) => { const step = selectedStepIndex + index; if (step >= track.steps.length) { overflow = true; return; } onStepNotesChange(track.id, step, [note]); }); if (overflow) onStatus("Riff reached the last step and stopped before overflowing."); } }
+  function applyChordToFretboard() { const matches: FretNote[] = []; standardTuning.forEach((openNote, stringIndex) => Array.from({ length: 13 }, (_, fret) => { const midi = noteToMidi(openNote) + fret; const note = midiToNote(midi); if (chordPitchClasses.has(stripOctave(note))) matches.push({ stringIndex, fret, note, midi }); })); setSelectedFrets(matches.slice(0, 12)); }
+  function toggleFret(stringIndex: number, fret: number) { const midi = noteToMidi(standardTuning[stringIndex]) + fret; const item = { stringIndex, fret, note: midiToNote(midi), midi }; setSelectedFrets((old) => old.some((n) => n.stringIndex === stringIndex && n.fret === fret) ? old.filter((n) => !(n.stringIndex === stringIndex && n.fret === fret)) : [...old, item]); }
+  return <div className="guitar-tools"><div className="control-grid compact-grid"><label>Mode<select value={mode} onChange={(e) => setMode(e.target.value as GuitarLabMode)}><option value="chord">Chord</option><option value="riff">Riff</option></select></label>{mode === "riff" && <label>Note Duration<select value={noteDuration} onChange={(e) => setNoteDuration(e.target.value as NoteDuration)}><option>1/4</option><option>1/8</option><option>1/16</option></select></label>}</div><p className="hint">{mode === "chord" ? "Chord: selected notes play together." : "Riff: selected notes play in order."}</p>
+    <Section title="Source"><label className="field-label">Source Sample<select value={sourceId} onChange={(e) => setSourceId(e.target.value)}><option value="">Select source…</option>{samples.filter((s) => s.type === "oneshot" || s.type === "loop" || s.isRendered).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>{source ? <p className="hint"><strong>{source.name}</strong><br />{source.type} · {source.category}{source.durationSeconds ? ` · ${source.durationSeconds.toFixed(2)}s` : " · duration unknown"}<br />Status: {source.loadStatus ?? "not loaded"}</p> : <p className="hint">Select a source sample to preview or render chords.</p>}{sourceWarning && <p className="warning-text">{sourceWarning}</p>}</Section>
+    <Section title="Chord Helper"><div className="control-grid compact-grid"><label>Root<select value={root} onChange={(e) => setRoot(e.target.value)}>{CHROMATIC_NOTES.map((n) => <option key={n}>{n}</option>)}</select></label><label>Type<select value={chordType} onChange={(e) => setChordType(e.target.value as ChordType)}>{CHORD_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label><label>Octave<select value={octave} onChange={(e) => setOctave(Number(e.target.value))}>{[1,2,3,4,5].map((o) => <option key={o}>{o}</option>)}</select></label></div><p className="chord-preview"><strong>{formatChordLabel(rootNote, chordType)}</strong> = {chordNotes.join(" ")}</p><div className="nudge-row"><button onClick={applyChordToFretboard}>Apply to Fretboard</button><button onClick={() => void preview(chordNotes)}>Preview Chord</button><button onClick={() => void render(chordNotes)}>Render Chord</button><button onClick={() => send(chordNotes)} disabled={!canSend}>Send Chord to Selected Step</button></div></Section>
+    <Section title="Fretboard"><div className="fretboard">{standardTuning.slice().reverse().map((openNote, rev) => { const stringIndex = standardTuning.length - 1 - rev; return <div className="fret-string" key={openNote}><span className="string-name">{openNote.replace("4", "e").replace(/\d/, "")}</span>{Array.from({ length: 13 }, (_, fret) => { const note = midiToNote(noteToMidi(openNote) + fret); const selected = selectedFretKeys.has(fretKey(stringIndex, fret)); const suggested = chordPitchClasses.has(stripOctave(note)); return <button type="button" key={fret} className={`fret ${selected ? "selected" : suggested ? "active" : ""}`} onClick={() => toggleFret(stringIndex, fret)}>{selected || suggested ? stripOctave(note) : fret === 0 ? "0" : ""}</button>; })}</div>; })}</div><p className="chord-selected">Selected: <strong>{selectedFrets.length ? selectedFrets.map((n) => n.note).join(" ") : "none"}</strong></p><div className="nudge-row"><button onClick={() => setSelectedFrets([])}>Clear Fretboard</button><button onClick={applyChordToFretboard}>Apply Chord Helper Shape</button><button onClick={() => send()}>Send to Selected Step</button><button onClick={() => void preview()}>Preview</button><button onClick={() => void render()}>Render to New Sample</button></div></Section>
+    <Section title="Piano Notes"><div className="piano-keyboard">{buildNoteRange("C3", 2).map((note) => <button key={note} type="button" className={`piano-key ${note.includes("#") ? "black" : "white"} ${pianoNotes.includes(note) ? "selected" : ""}`} onClick={() => setPianoNotes((old) => old.includes(note) ? old.filter((n) => n !== note) : [...old, note])}>{stripOctave(note)}</button>)}</div><p className="chord-selected">Selected: <strong>{pianoNotes.length ? pianoNotes.join(" ") : "none"}</strong></p><div className="nudge-row"><button onClick={() => void preview(pianoNotes)}>Preview Selected Notes</button><button onClick={() => void preview(chordNotes)}>Preview Chord Helper Chord</button><button onClick={() => void preview([rootNote])}>Preview Root Note</button><button onClick={() => setPianoNotes([])}>Clear</button></div></Section>
+    <Section title="Guitar Lab FX"><div className="slider-stack">{([["volume",0,1.5,.01],["pitchOffsetSemitones",-24,24,1],["reverbWet",0,1,.01],["delayWet",0,1,.01],["drive",0,1,.01],["chorusWet",0,1,.01]] as const).map(([key,min,max,step]) => <label className="slider-control compact" key={key}><span className="slider-label">{key} <em>{fx[key]}</em></span><input type="range" min={min} max={max} step={step} value={fx[key]} onChange={(e) => setFx((old) => ({ ...old, [key]: Number(e.target.value) }))} /></label>)}</div><button onClick={() => setFx(defaultFx)}>Reset Guitar FX</button><p className="hint">Preview uses these FX where routing is supported. Render currently applies volume and pitch offset; time FX are TODO/bypass.</p></Section>
+    <Section title="Tab Scratchpad"><textarea className="tab-scratchpad" value={tab} onChange={(e) => setTab(e.target.value)} rows={6} spellCheck={false} /><div className="nudge-row"><button onClick={() => setTab((old) => `${old}\n# Selected: ${playableNotes.join(" ")}`)}>Insert selected notes as comment</button><button onClick={() => setTab((old) => `${old}\n${formatChordLabel(rootNote, chordType)} (${chordNotes.join(" ")})`)}>Insert chord name</button><button onClick={() => setTab("")}>Clear Tab</button><button onClick={() => navigator.clipboard?.writeText(tab)}>Copy Tab to Clipboard</button><button onClick={() => void render(playableNotes, true)}>Render + Download WAV</button></div></Section>
   </div>;
 }
