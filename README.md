@@ -17,13 +17,14 @@ npm run build
 
 ## Themes and skins
 
-The Skin selector includes the existing built-in themes plus three CSS-only themes inspired by classic Windows UI eras:
+The Skin selector includes the existing built-in themes, a readable **Modern Retro 2000s** theme, and three CSS-only themes inspired by classic Windows UI eras:
 
+- **Modern Retro 2000s** — modern dark charcoal/deep-blue panels with readable text, early-2000s glossy titlebars, neon cyan accents, warm orange highlights, cyan/blue original waveforms, and orange/gold processed waveforms.
 - **Aero Glass** — Vista-era glass inspiration with translucent blue/purple panels, glossy gradients, cyan accents, cyan/blue original waveforms, and warm gold processed waveforms.
 - **XP Royale** — cleaner XP/Royale inspiration with bright blue title bars, cream panel surfaces, rounded controls, royal-blue accents, green secondary accents, blue original waveforms, and orange processed waveforms.
 - **Seven Glass** — Windows 7 Aero inspiration with darker blue/grey glass panels, restrained gradients, clean borders, sky-blue accents, light-blue original waveforms, and amber processed waveforms.
 
-These skins are visual homages only. They do not use Microsoft logos, wallpapers, icons, or external image assets; the look is built from CSS variables, gradients, borders, transparency, and shadows. Switching skins updates the whole app instantly without a reload.
+These skins are visual homages only. They do not use Microsoft logos, wallpapers, icons, or external image assets; the look is built from CSS variables, gradients, borders, transparency, and shadows. Switching skins updates the whole app instantly without a reload. The selected skin id is remembered in browser `localStorage`, so refreshing the page keeps the same theme unless that theme no longer exists.
 
 ## Samples
 
@@ -54,16 +55,18 @@ Track Controls is the main sound-editing area for the selected track. It include
 - Assigned sample name, filename, category, and type.
 - Track mode, root note, and octave range for keyboard/chord mode.
 - Original / Processed / Overlay waveform modes.
-- Trim, fade, pitch, volume, mute, and solo controls.
+- Region-based sample selection with **Region Start**, **Region End**, and **Region Length** readouts, plus fade, pitch, volume, mute, and solo controls.
 - Fade curve selectors.
 - FX Rack.
 - Preview and render buttons.
 
-The processed waveform currently approximates trim, fade, pitch-length changes, and volume. Full FX waveform rendering is marked as coming soon, but **Preview Track** uses the current track settings and FX chain during playback.
+The region controls are useful for cutting one hit from a long loop: set **Region Start** near the hit, set **Region End** just after it, and use **Region Length** to confirm the selected duration in milliseconds and seconds. The old trim model remains compatible internally: `startOffsetMs` maps to Region Start and `endTrimMs` maps to `sampleDurationMs - Region End`.
+
+The processed waveform currently approximates the selected region, fade, pitch-length changes, and volume. Full FX waveform rendering is marked as coming soon, but **Preview Track** uses the current track settings and FX chain during playback.
 
 Track render buttons download files to your computer:
 
-- **Render Selected Track WAV** downloads a processed dry WAV with trim/fade/pitch/volume.
+- **Render Selected Track WAV** downloads a processed dry WAV with selected-region/fade/pitch/volume.
 - **Render Selected Track Dry WAV** downloads the same dry render with a `dry` suffix.
 - **Render Selected Track With FX WAV** is intentionally disabled as coming soon.
 
@@ -110,7 +113,7 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 
 - FX waveform rendering and WAV export with FX are coming soon.
 - Current pattern mix WAV, arrangement mix WAV, and stems ZIP are coming soon.
-- Track WAV rendering is mono dry render with trim/fade/pitch/volume.
+- Track WAV rendering is mono dry render with selected-region/fade/pitch/volume.
 - Playhead sync is approximate and not sample-accurate.
 - There is no backend save to `public/samples`.
 - Cloud accounts, Winamp `.wsz` import, drag-and-drop windows, advanced DAW timelines, and full spectral analysis are intentionally not implemented.

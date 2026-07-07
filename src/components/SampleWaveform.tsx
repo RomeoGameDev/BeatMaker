@@ -36,6 +36,7 @@ function processPeaks(peaks: Peak[], durationMs: number, settings?: Partial<Trac
   const start = clamp((settings.startOffsetMs ?? 0) / Math.max(1, durationMs), 0, 1);
   const end = clamp(1 - ((settings.endTrimMs ?? 0) / Math.max(1, durationMs)), start, 1);
   const gain = clamp(settings.volume ?? 1, 0, 1.5);
+  const regionLength = Math.max(1, end - start);
   const fadeIn = (settings.fadeInMs ?? 0) / Math.max(1, durationMs);
   const fadeOut = (settings.fadeOutMs ?? 0) / Math.max(1, durationMs);
   return peaks.map((peak, index) => {
@@ -43,8 +44,8 @@ function processPeaks(peaks: Peak[], durationMs: number, settings?: Partial<Trac
     if (pos < start || pos > end) return { min: 0, max: 0 };
     const inLocal = pos - start;
     const outLocal = end - pos;
-    const fadeInAmp = fadeIn > 0 ? clamp(curvePoint(settings.fadeInCurve, inLocal / fadeIn), 0, 1) : 1;
-    const fadeOutAmp = fadeOut > 0 ? clamp(curvePoint(settings.fadeOutCurve, outLocal / fadeOut), 0, 1) : 1;
+    const fadeInAmp = fadeIn > 0 ? clamp(curvePoint(settings.fadeInCurve, inLocal / Math.min(fadeIn, regionLength)), 0, 1) : 1;
+    const fadeOutAmp = fadeOut > 0 ? clamp(curvePoint(settings.fadeOutCurve, outLocal / Math.min(fadeOut, regionLength)), 0, 1) : 1;
     const amp = Math.min(fadeInAmp, fadeOutAmp) * gain;
     return { min: clamp(peak.min * amp, -1, 1), max: clamp(peak.max * amp, -1, 1) };
   });
@@ -91,11 +92,15 @@ export default function SampleWaveform({ sample, settings, playheadMs, processed
     else draw(waveform.peaks, original, .85);
   }, [waveform, settings, processed, mode]);
 
-  const durationMs = Math.max(waveform.durationMs, 1);
-  const startPercent = clamp(((settings?.startOffsetMs ?? 0) / durationMs) * 100, 0, 100);
-  const endPercent = clamp(100 - (((settings?.endTrimMs ?? 0) / durationMs) * 100), 0, 100);
-  const fadeInPercent = clamp(((settings?.fadeInMs ?? 0) / durationMs) * 100, 0, 100);
-  const fadeOutPercent = clamp(((settings?.fadeOutMs ?? 0) / durationMs) * 100, 0, 100);
+  const durationMs = Math.max(waveform.durationMs || sample?.durationMs || 10000, 1);
+  const regionStartMs = clamp(settings?.startOffsetMs ?? 0, 0, Math.max(0, durationMs - 1));
+  const regionEndMs = clamp(durationMs - (settings?.endTrimMs ?? 0), regionStartMs + 1, durationMs);
+  const regionLengthMs = Math.max(1, regionEndMs - regionStartMs);
+  const startPercent = clamp((regionStartMs / durationMs) * 100, 0, 100);
+  const endPercent = clamp((regionEndMs / durationMs) * 100, 0, 100);
+  const selectedWidthPercent = Math.max(0, endPercent - startPercent);
+  const fadeInPercent = Math.min(clamp(((settings?.fadeInMs ?? 0) / durationMs) * 100, 0, 100), selectedWidthPercent);
+  const fadeOutPercent = Math.min(clamp(((settings?.fadeOutMs ?? 0) / durationMs) * 100, 0, 100), selectedWidthPercent);
   const message = waveform.status === "loading" ? "Loading waveform…" : waveform.status === "unavailable" ? "Waveform unavailable" : waveform.status === "decode-error" ? "Found, but not WebAudio-decodable. Convert to PCM WAV for editing." : !sample ? "Choose a sample to see its waveform" : "";
-  return <div className="sample-waveform" aria-label="Real sample waveform preview">{waveform.status === "ready" ? <canvas ref={canvasRef} className="sample-waveform-canvas" /> : <div className="waveform-message">{message}</div>}{waveform.status === "ready" && <><div className="fade-region fade-in" style={{ left: `${startPercent}%`, width: `${fadeInPercent}%` }} /><div className="fade-region fade-out" style={{ left: `${Math.max(startPercent, endPercent - fadeOutPercent)}%`, width: `${fadeOutPercent}%` }} /><svg className="fade-curves" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={`0,100 ${Array.from({ length: 12 }, (_, i) => `${(fadeInPercent / 11) * i},${100 - curvePoint(settings?.fadeInCurve, i / 11) * 100}`).join(" ")}`} /><polyline points={Array.from({ length: 12 }, (_, i) => `${endPercent - fadeOutPercent + (fadeOutPercent / 11) * i},${curvePoint(settings?.fadeOutCurve, i / 11) * 100}`).join(" ")} /></svg>{playheadMs !== undefined && <div className="playhead-marker" style={{ left: `${clamp((playheadMs / durationMs) * 100, 0, 100)}%` }}><span>Play</span></div>}<div className="trim-marker start-marker" style={{ left: `${startPercent}%` }}><span>Start</span></div><div className="trim-marker end-marker" style={{ left: `${endPercent}%` }}><span>End</span></div></>}</div>;
+  return <div className="sample-waveform" aria-label="Real sample waveform preview">{waveform.status === "ready" ? <canvas ref={canvasRef} className="sample-waveform-canvas" /> : <div className="waveform-message">{message}</div>}{waveform.status === "ready" && <><div className="region-shade region-shade-left" style={{ left: 0, width: `${startPercent}%` }} /><div className="region-shade region-shade-right" style={{ left: `${endPercent}%`, width: `${100 - endPercent}%` }} /><div className="selected-region" style={{ left: `${startPercent}%`, width: `${selectedWidthPercent}%` }} /><div className="fade-region fade-in" style={{ left: `${startPercent}%`, width: `${fadeInPercent}%` }} /><div className="fade-region fade-out" style={{ left: `${Math.max(startPercent, endPercent - fadeOutPercent)}%`, width: `${fadeOutPercent}%` }} /><svg className="fade-curves" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={`${startPercent},100 ${Array.from({ length: 12 }, (_, i) => `${startPercent + (fadeInPercent / 11) * i},${100 - curvePoint(settings?.fadeInCurve, i / 11) * 100}`).join(" ")}`} /><polyline points={Array.from({ length: 12 }, (_, i) => `${endPercent - fadeOutPercent + (fadeOutPercent / 11) * i},${curvePoint(settings?.fadeOutCurve, i / 11) * 100}`).join(" ")} /></svg>{playheadMs !== undefined && <div className="playhead-marker" style={{ left: `${clamp((playheadMs / durationMs) * 100, 0, 100)}%` }}><span>Play</span></div>}<div className="trim-marker start-marker" style={{ left: `${startPercent}%` }}><span>Start</span></div><div className="trim-marker end-marker" style={{ left: `${endPercent}%` }}><span>End</span></div><div className="region-length-label" style={{ left: `${startPercent}%`, width: `${selectedWidthPercent}%` }}>{Math.round(regionLengthMs)} ms</div></>}</div>;
 }
