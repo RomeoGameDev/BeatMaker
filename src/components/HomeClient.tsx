@@ -67,7 +67,15 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     if (skipNextPatternSyncRef.current) { skipNextPatternSyncRef.current = false; return; }
     setPatterns((old) => ({ ...old, [activePatternRef.current]: Object.fromEntries(tracks.map((track) => [track.id, cloneSteps(track.steps)])) } as PatternSteps));
   }, [tracks]);
-  useEffect(() => () => disposeSequencer(), []);
+  useEffect(() => () => { clearPlayhead(); disposeSequencer(); }, []);
+
+  function clearPlayhead() {
+    if (playheadFrameRef.current !== null) {
+      cancelAnimationFrame(playheadFrameRef.current);
+      playheadFrameRef.current = null;
+    }
+    setPlayheadMs(undefined);
+  }
 
   function applySampleDuration(updated: Sample) {
     setSamples((old) => old.map((sample) => sample.path === updated.path ? { ...sample, ...updated } : sample));
@@ -155,7 +163,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function clearPattern(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: makeSteps(track.steps.length) } : track)); }
   function resetTrack(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, assignedSample: undefined, steps: makeSteps(track.steps.length), settings: { ...defaultTrackSettings }, mode: "oneshot", rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot", loopLengthSteps: 16, retriggerLoop: false } : track)); }
   function animatePlayhead(track: SequencerTrack) {
-    if (playheadFrameRef.current !== null) cancelAnimationFrame(playheadFrameRef.current);
+    clearPlayhead();
     const sampleMs = track.assignedSample?.durationMs ?? 10000;
     const start = Math.min(track.settings.startOffsetMs, Math.max(0, sampleMs - 1));
     const end = Math.max(start + 1, sampleMs - track.settings.endTrimMs);
@@ -173,6 +181,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
 
   async function previewSample(sample: Sample) {
     stopAllAudio();
+    clearPlayhead();
     setStatus("Preview stopped.");
     const updated = await ensureDuration(sample);
     const result = await playSample(updated);
@@ -312,6 +321,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function stopSequencer() {
     if (arrangementTimerRef.current !== null) { window.clearTimeout(arrangementTimerRef.current); arrangementTimerRef.current = null; setArrangementPlaying(false); }
     stopAllAudio();
+    clearPlayhead();
     disposeSequencer();
     activeLoopPlayersRef.current.clear();
     setCurrentStep(0);
@@ -323,6 +333,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     await startAudio();
     disposeSequencer();
     stopAllAudio();
+    clearPlayhead();
     setBpm(bpm);
     let absoluteStep = 0;
     schedulerIdRef.current = Tone.Transport.scheduleRepeat((time) => {
@@ -374,7 +385,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     <main className="app-shell" style={themeStyle}>
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
       <div className="workspace-grid">
-        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
+        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
         <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
         <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
