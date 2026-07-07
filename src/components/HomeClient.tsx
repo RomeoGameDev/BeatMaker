@@ -22,6 +22,7 @@ type PanelId = "library" | "sequencer" | "trackControls" | "arrangement" | "expo
 const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", sequencer: "normal", trackControls: "normal", arrangement: "normal", export: "normal", guitar: "normal" };
 type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 const cloneSteps = (steps: SequencerStep[]) => steps.map((step) => ({ ...step, notes: step.notes ? [...step.notes] : undefined }));
+const THEME_STORAGE_KEY = "beatmaker.selectedSkinId";
 
 export default function HomeClient({ samples: initialSamples }: { samples: Sample[] }) {
   const [samples, setSamples] = useState<Sample[]>(initialSamples);
@@ -53,6 +54,11 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const selectedSkin = useMemo(() => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0], [selectedSkinId]);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId);
 
+  useEffect(() => {
+    const savedSkinId = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedSkinId && skins.some((skin) => skin.id === savedSkinId)) setSelectedSkinId(savedSkinId);
+  }, []);
+  useEffect(() => { window.localStorage.setItem(THEME_STORAGE_KEY, selectedSkin.id); }, [selectedSkin.id]);
   useEffect(() => { setBpm(bpm); }, [bpm]);
   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
   useEffect(() => { patternsRef.current = patterns; }, [patterns]);
@@ -150,8 +156,10 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function resetTrack(trackId: number) { setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, assignedSample: undefined, steps: makeSteps(track.steps.length), settings: { ...defaultTrackSettings }, mode: "oneshot", rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot", loopLengthSteps: 16, retriggerLoop: false } : track)); }
   function animatePlayhead(track: SequencerTrack) {
     if (playheadFrameRef.current !== null) cancelAnimationFrame(playheadFrameRef.current);
-    const start = track.settings.startOffsetMs;
-    const duration = Math.max(120, 2000 - track.settings.endTrimMs - start);
+    const sampleMs = track.assignedSample?.durationMs ?? 10000;
+    const start = Math.min(track.settings.startOffsetMs, Math.max(0, sampleMs - 1));
+    const end = Math.max(start + 1, sampleMs - track.settings.endTrimMs);
+    const duration = Math.max(120, end - start);
     const started = performance.now();
     // TODO: Replace this approximate visual timer with sample-accurate playhead sync later.
     const tick = () => {
