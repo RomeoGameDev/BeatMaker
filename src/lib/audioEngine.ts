@@ -1,5 +1,6 @@
 import * as Tone from "tone";
 import { createToneEffectNodes } from "@/lib/effects";
+import { normalizeSamplePath, SUPPORTED_AUDIO_EXTENSIONS } from "@/lib/samplePaths";
 import type { Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
@@ -30,6 +31,18 @@ export type OneShotResult = {
 };
 
 const oneShotResult = (ok: boolean, status: OneShotStatus, message: string): OneShotResult => ({ ok, status, message });
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+function sampleDebug(sample: Sample, normalizedUrl: string) {
+  return { id: sample.id, type: sample.type, category: sample.category, path: sample.path, normalizedUrl };
+}
+
+function hasSupportedAudioExtension(url: string) {
+  if (/^(blob:|data:)/i.test(url)) return true;
+  const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
+  const extension = pathname.match(/\.[a-z0-9]+$/)?.[0];
+  return Boolean(extension && SUPPORTED_AUDIO_EXTENSIONS.has(extension));
+}
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
 function sanitizeSettings(settings: TrackSettings) {
@@ -95,8 +108,39 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     // TODO: Optimize later with Tone.Players or decoded buffer caching. For now,
     // each hit gets a fresh Player so fast clicks and overlapping steps cannot
     // reuse a started/stopped source in an unsafe way.
+    const sampleUrl = normalizeSamplePath(sample.path);
+    if (isDevelopment) console.debug("Loading sample", sampleDebug(sample, sampleUrl));
+    if (!hasSupportedAudioExtension(sampleUrl)) {
+      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
+      console.warn(result.message, sampleDebug(sample, sampleUrl));
+      return result;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(sampleUrl);
+    } catch (fetchError) {
+      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
+      console.warn(result.message, { ...sampleDebug(sample, sampleUrl), error: fetchError });
+      return result;
+    }
+    if (!response.ok) {
+      const result = oneShotResult(false, "missing", `Could not load ${sampleUrl}`);
+      console.warn(result.message, { ...sampleDebug(sample, sampleUrl), status: response.status });
+      return result;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
     player = new Tone.Player({ autostart: false });
-    await player.load(sample.path);
+    try {
+      const decoded = await Tone.getContext().decodeAudioData(arrayBuffer.slice(0));
+      player.buffer.set(decoded);
+    } catch (decodeError) {
+      const result = oneShotResult(false, "error", `Could not load ${sampleUrl}`);
+      console.warn("Could not decode sample audio.", { ...sampleDebug(sample, sampleUrl), error: decodeError });
+      disposeActivePlayer(player);
+      return result;
+    }
 
     if (!player.buffer.loaded) {
       disposeActivePlayer(player);
@@ -153,7 +197,8 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     return { ...oneShotResult(true, "playing", "Playing."), player };
   } catch (error) {
     disposeActivePlayer(player, tempNodes);
-    const result = oneShotResult(false, "error", "Sample file missing or unsupported.");
+    const sampleUrl = sample?.path ? normalizeSamplePath(sample.path) : "sample";
+    const result = oneShotResult(false, "error", `Could not load ${sampleUrl}`);
     console.warn(result.message, { sample, error });
     return result;
   }

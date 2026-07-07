@@ -34,6 +34,8 @@ public/samples/oneshots/
 public/samples/loops/
 ```
 
+Put one-shot samples in `public/samples/oneshots/` and loop samples in `public/samples/loops/`. They are served in the browser as `/samples/oneshots/...` and `/samples/loops/...`, so WAV filenames such as `kick01.wav` and `kick02.wav` work from the one-shot folder.
+
 Supported extensions are `.wav`, `.mp3`, `.ogg`, and `.flac`. Categories are guessed from lowercase filenames such as `kick`, `snare`, `hat`, `clap`, `perc`, `bass`, `guitar`, `melody`, or `loop`; anything else is `other`.
 
 ## Layout and window panels
@@ -130,9 +132,11 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 
 - **Global Stop stops all audio.** The main Stop button now stops the Tone transport, clears sequencer scheduling, stops arrangement playback, and disposes currently playing preview/track players so long previews do not continue in the background.
 - **One-shots vs loops.** One-shot samples keep the normal step-trigger behavior. Loop or long samples can use loop controls so a trigger step claims a region instead of retriggering every cycle.
+- **Collapsible Loop Controls.** Track Controls shows Loop Controls as a compact collapsible section with mode, loop length, and sample-length summary. It opens by default for loop or long samples and stays compact for short one-shots.
 - **Loop length in steps.** Loop tracks can choose 1, 2, 4, 8, 16, 24, or 32 steps. The sequencer shades the occupied steps after the trigger step. Step duration is based on the current BPM using 16th notes.
 - **Loop retrigger behavior.** Retrigger Loop is off by default to prevent overlapping long loops on the same track. Turning it on stops the previous loop on that track and restarts from the new trigger.
 - **Dynamic sample trim ranges.** The browser decodes sample duration when a sample is previewed, assigned, or selected. Start Offset and End Trim ranges expand to the actual sample length, while Fade In/Out allow up to the shorter of the sample length or 5000 ms. If duration is not loaded yet, the app uses safe fallback ranges.
 - **Render to New Sample.** Track Controls can render the selected track's current sample into a new in-app sample using trim, fade, pitch, and volume. FX rendering into the new sample is not included yet; normal playback FX remain unchanged.
 - **Download rendered WAVs for permanence.** Rendered in-app samples work immediately in the current session and appear in Sample Library, but browser apps cannot write directly into `public/samples` without a backend. Use **Render to New Sample + Download WAV** for permanent saving, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
+- **Arrangement slot count.** Arrangement timelines can be resized to 4, 8, 16, 24, 32, or 64 slots. Increasing adds empty slots; decreasing truncates only the extra slots, and Project JSON saves both the slot count and slot contents.
 - **Project JSON limitation.** Project JSON can store rendered sample metadata, but it cannot persist the temporary blob/object URL audio after refresh. Download rendered samples before closing or refreshing the page.

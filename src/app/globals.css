@@ -150,3 +150,22 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
   font-weight: 700;
   margin: 0.35rem 0;
 }
+.loop-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.loop-controls h4 { margin: 0; color: var(--color-accent); }
+.loop-summary { margin: 0.2rem 0 0; font-size: 0.78rem; color: var(--color-muted, #b8b8b8); }
+.loop-controls-body { display: grid; gap: 0.65rem; margin-top: 0.75rem; }
+.loop-controls.collapsed { padding: 0.65rem 0.85rem; }
+.slot-count-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+.slot-count-control select { min-width: 5rem; }

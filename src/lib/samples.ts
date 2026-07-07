@@ -2,9 +2,9 @@ import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Sample, SampleCategory, SampleType } from "@/types";
 
-const SAMPLE_ROOT = path.join(process.cwd(), "public", "samples");
-const SUPPORTED_AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".ogg", ".flac"]);
+import { normalizeSamplePath, SUPPORTED_AUDIO_EXTENSIONS } from "@/lib/samplePaths";
 
+const SAMPLE_ROOT = path.join(process.cwd(), "public", "samples");
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -63,7 +63,7 @@ function discoverSamples(directory = SAMPLE_ROOT, discoveredSamples: Sample[] = 
       name,
       type: guessType(relativeDirectory),
       category: guessCategory(entry),
-      path: `/samples/${relativePath.join("/")}`
+      path: normalizeSamplePath(`/samples/${relativePath.join("/")}`)
     });
   });
 
