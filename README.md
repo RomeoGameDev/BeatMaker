@@ -59,11 +59,11 @@ Track Controls is the main sound-editing area for the selected track. It include
 - Region-based sample selection with **Region Start**, **Region End**, and **Region Length** readouts, plus fade, pitch, volume, mute, and solo controls.
 - Fade curve selectors.
 - FX Rack.
-- Preview and render buttons.
+- Play and render buttons.
 
 The collapsible region controls are useful for cutting one hit from a long loop: set **Region Start** near the hit, set **Region End** just after it, and use **Region Length** to confirm the selected duration in milliseconds and seconds. The old trim model remains compatible internally: `startOffsetMs` maps to Region Start and `endTrimMs` maps to `sampleDurationMs - Region End`.
 
-The processed waveform currently approximates the selected region, fade, pitch-length changes, and volume. Full FX waveform rendering is marked as coming soon, but **Preview Track** uses the current track settings and FX chain during playback.
+The processed waveform currently approximates the selected region, fade, pitch-length changes, and volume. Full FX waveform rendering is marked as coming soon, but **Play Track** uses the current track settings and FX chain during playback.
 
 Track render buttons download files to your computer:
 
@@ -126,7 +126,7 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 3. Open the app in the browser.
 4. Confirm the Sample Editor panel is gone.
 5. Select Track 1 with an assigned kick.
-6. In Track Controls, switch waveform Original / Processed / Overlay, move Start/Fade/Volume, confirm visualization changes, and click Preview Track.
+6. In Track Controls, switch waveform Original / Processed / Overlay, move Start/Fade/Volume, confirm visualization changes, and click Play Track.
 7. In Step Sequencer, set steps to 8, add hits, set steps to 16 and confirm old hits remain, then set max 32 and test playback.
 8. In Arrangement, create Pattern B, edit Pattern A and B differently, copy/paste a pattern, fill timeline slots, and try Play Arrangement.
 9. In Export, export project JSON, import project JSON, and try the current pattern WAV button to see the friendly coming-soon status.
@@ -140,8 +140,8 @@ Workflow:
 
 1. Select a **Source Sample** from discovered one-shots, loops, or rendered in-app samples.
 2. Choose notes with the Chord Helper, compact piano, or the 0-12 fret standard-tuning fretboard (`E A D G B e`).
-3. Preview selected notes or the Chord Helper chord using the source sample and current app BPM.
-4. Add optional **Guitar Lab FX**. Preview supports safe mini FX routing where available; render currently applies volume and pitch offset, with time/modulation FX marked as TODO/bypass.
+3. Play selected notes or the Chord Helper chord using the source sample and current app BPM.
+4. Add optional **Guitar Lab FX**. Play supports safe mini FX routing where available; render currently applies volume and pitch offset, with time/modulation FX marked as TODO/bypass.
 5. Render the chord/stab to a new locally saved rendered sample, or send the chord/selected notes to the selected Keyboard-mode sequencer step.
 
 Rendered Guitar Tools samples appear in Sample Library immediately, are saved locally in browser IndexedDB, survive refresh, remain previewable/assignable after reload, and can be removed from Sample Library.
@@ -164,7 +164,7 @@ The old manual Tab Scratchpad is now a collapsed **Generated Tab** output area. 
 
 ### Audio troubleshooting: browser-decodable WAVs
 
-Some WAV files are not browser-decodable even when they play correctly in DAWs or desktop audio tools. The app can find those files by path, but Web Audio `decodeAudioData` may still reject their encoding. When that happens, the Sample Library labels the file as **decode failed = preview fallback only** instead of missing. The Preview button may still audition it through browser audio, but waveform, trim, sequencing, and render/export features require a WebAudio-decodable file.
+Some WAV files are not browser-decodable even when they play correctly in DAWs or desktop audio tools. The app can find those files by path, but Web Audio `decodeAudioData` may still reject their encoding. When that happens, the Sample Library labels the file as **decode failed = preview fallback only** instead of missing. The Play button may still audition it through browser audio, but waveform, trim, sequencing, and render/export features require a WebAudio-decodable file.
 
 Convert problem WAVs to PCM WAV with ffmpeg:
 
@@ -226,10 +226,13 @@ Limitations:
 3. Choose an equal split size: 2, 4, 8, or 16.
 4. Click **Split** to create slices such as `1/4`, `2/4`, `3/4`, `4/4`.
 5. Each slice stores start/end milliseconds plus attack/fade values.
-6. Preview individual slices, clear/remove slices, then click **Create Sliced Track**.
-7. The Step Sequencer adds one parent sliced track with a row for each slice. Trigger each slice independently on steps.
+6. Drag across the waveform to select a custom region; the selection overlay shows start, end, and length.
+7. Use **Play Selection** to audition only that selected region, **Add Selection as Slice** to create a `Custom N` slice, or **Clear Selection** to remove the overlay.
+8. Adjust slice boundaries by dragging the basic waveform start/end handles or by editing numeric Start/End values in the slice list. Slice playback, sliced-track creation, and export use the updated boundaries.
+9. Play individual slices, rename/duplicate/remove slices, sort if needed, then click **Create Sliced Track**.
+10. The Step Sequencer adds one parent sliced track with a row for each slice. Trigger each slice independently on steps.
 
-Manual drag slicing and transient detection are planned later; the MVP focuses on reliable equal-split slicing and numeric attack/fade editing.
+All Play buttons are exclusive: starting Sample Library, Track Controls, Waveform / Slicer, slice, Guitar Tools, Arrangement, or Sequencer playback first stops currently playing audio, preview players, playheads, and transport scheduling. The global Stop button stops everything and clears playheads.
 
 ### Mute and Solo
 - Mute and Solo controls now live directly on each Step Sequencer track header.
@@ -244,7 +247,7 @@ Manual drag slicing and transient detection are planned later; the MVP focuses o
 - FX export may be dry for now; full FX rendering in export is a later pass.
 
 ### Current limitations
-- Manual drag handles for slice boundaries are not implemented yet.
+- Slice drag handles are a basic MVP; advanced snapping and neighbor-aware boundary constraints are planned later. Overlapping slices are currently allowed.
 - Transient detection / auto-chop is not implemented yet.
 - Some export paths are dry if FX offline rendering is unavailable.
 - Browser-only apps cannot save imported files into `public/samples` or delete physical disk samples without a backend.

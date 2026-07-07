@@ -215,6 +215,16 @@ export async function triggerSampleRegion({ sample, startMs, endMs, time = Tone.
   return triggerSample(sample, settings, time, effects, (end - start) / 1000);
 }
 
+export async function playSampleRegionExclusive(sample: Sample | undefined, startMs: number, endMs: number, options: { volume?: number; pitchSemitones?: number; fadeInMs?: number; fadeOutMs?: number; effects?: TrackEffect[] } = {}) {
+  stopAllAudio();
+  try {
+    return await triggerSampleRegion({ sample, startMs, endMs, time: Tone.now(), ...options });
+  } catch (error) {
+    console.warn("Could not play sample region.", error);
+    return oneShotResult(false, "error", "Could not play selected region.");
+  }
+}
+
 export async function previewPitchedNotes({ sample, rootNote, notes, mode, bpm, noteDuration, settings, effects }: { sample?: Sample; rootNote: string; notes: string[]; mode: GuitarLabMode; bpm: number; noteDuration: NoteDuration; settings?: Partial<TrackSettings>; effects?: GuitarLabEffects; }): Promise<OneShotResult> {
   if (!sample) return oneShotResult(false, "missing", "Select a source sample to preview or render chords.");
   if (!notes.length) return oneShotResult(false, "missing", "Select at least one note to preview.");
