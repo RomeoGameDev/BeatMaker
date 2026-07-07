@@ -23,6 +23,9 @@ type Props = {
   selectedTrackId: number;
   selectedStepIndex?: number;
   onToggleStep: (trackId: number, stepIndex: number) => void;
+  onToggleSliceStep: (trackId: number, sliceId: string, stepIndex: number) => void;
+  onToggleMute: (trackId: number) => void;
+  onToggleSolo: (trackId: number) => void;
   onSelectTrack: (trackId: number) => void;
   onAddTrack: () => void;
   onRemoveTrack: (trackId: number) => void;
@@ -48,28 +51,20 @@ export function makeInitialTracks(defaultSample?: Sample): SequencerTrack[] {
   }));
 }
 
-export default function StepSequencer({ tracks, bpm, currentStep, selectedTrackId, selectedStepIndex, onToggleStep, onSelectTrack, onAddTrack, onRemoveTrack, activePattern, stepCount, onStepCountChange }: Props) {
+export default function StepSequencer({ tracks, bpm, currentStep, selectedTrackId, selectedStepIndex, onToggleStep, onToggleSliceStep, onToggleMute, onToggleSolo, onSelectTrack, onAddTrack, onRemoveTrack, activePattern, stepCount, onStepCountChange }: Props) {
   return (
     <div className="sequencer-panel">
       <div className="sequencer-actions"><strong>Editing Pattern {activePattern}</strong><label className="field-label">Steps<select value={stepCount} onChange={(event) => onStepCountChange(Number(event.target.value))}>{[4, 8, 16, 24, 32].map((count) => <option key={count} value={count}>{count}</option>)}</select></label><button type="button" onClick={onAddTrack}>+ Add Track</button></div>
       <div className="step-numbers" style={{ gridTemplateColumns: `repeat(${stepCount}, 1fr)` }}>{Array.from({ length: stepCount }, (_, step) => <span key={step}>{step + 1}</span>)}</div>
       {tracks.map((track) => (
-        <div className={`track-row ${selectedTrackId === track.id ? "selected-track" : ""}`} key={track.id} onClick={() => onSelectTrack(track.id)}>
-          <div className="track-label"><strong>{track.name}</strong><small>{track.mode === "keyboard" ? "Keyboard" : (track.assignedSample?.type === "loop" || track.assignedSample?.isLong ? `Loop · ${track.loopLengthSteps ?? 16} steps` : "One-shot")} · {track.assignedSample?.name ?? "No sample"}{track.settings.mute ? " · muted" : ""}</small>{tracks.length > 1 && <button type="button" className="remove-track" onClick={(event) => { event.stopPropagation(); onRemoveTrack(track.id); }}>Remove</button>}</div>
-          <div className="steps" style={{ gridTemplateColumns: `repeat(${stepCount}, 1fr)` }}>
+        <div className={`track-row ${selectedTrackId === track.id ? "selected-track" : ""} ${track.mode === "sliced" ? "sliced-track" : ""}`} key={track.id} onClick={() => onSelectTrack(track.id)}>
+          <div className="track-label"><strong>{track.name}</strong><small>{track.mode === "sliced" ? `Sliced · ${track.slices?.length ?? 0} slices · ${track.assignedSample?.name ?? "No source"}` : track.mode === "keyboard" ? `Keyboard · ${track.assignedSample?.name ?? "No sample"}` : (track.assignedSample?.type === "loop" || track.assignedSample?.isLong ? `Loop · ${track.loopLengthSteps ?? 16} steps · ${track.assignedSample?.name ?? "No sample"}` : `One-shot · ${track.assignedSample?.name ?? "No sample"}`)}</small><div className="track-header-buttons"><button type="button" className={track.settings.mute ? "mute-button active" : "mute-button"} onClick={(event) => { event.stopPropagation(); onToggleMute(track.id); }}>Mute</button><button type="button" className={track.settings.solo ? "solo-button active" : "solo-button"} onClick={(event) => { event.stopPropagation(); onToggleSolo(track.id); }}>Solo</button>{tracks.length > 1 && <button type="button" className="remove-track" onClick={(event) => { event.stopPropagation(); onRemoveTrack(track.id); }}>Remove</button>}</div></div>
+          {track.mode === "sliced" ? <div className="slice-step-rows">{(track.slices ?? []).map((slice) => <div className="slice-step-row" key={slice.id}><div className="slice-step-label"><span className="slice-dot" style={{ background: slice.color }} />{slice.name}</div><div className="steps" style={{ gridTemplateColumns: `repeat(${stepCount}, 1fr)` }}>{(track.sliceSteps?.[slice.id] ?? []).map((step, stepIndex) => <button key={stepIndex} className={`step ${step.active ? "on" : ""} ${currentStep === stepIndex ? "playing" : ""}`} style={step.active ? { backgroundColor: slice.color } : undefined} onClick={(event) => { event.stopPropagation(); onToggleSliceStep(track.id, slice.id, stepIndex); }} aria-label={`${track.name} ${slice.name} step ${stepIndex + 1}`} />)}</div></div>)}</div> : <div className="steps" style={{ gridTemplateColumns: `repeat(${stepCount}, 1fr)` }}>
             {track.steps.map((step, stepIndex) => {
-              const isLoopTrack = Boolean(track.assignedSample && (track.assignedSample.type === "loop" || track.assignedSample.isLong || track.loopMode !== "oneshot"));
-              const occupied = isLoopTrack && track.steps.some((candidate, candidateIndex) => candidate.active && stepIndex >= candidateIndex && stepIndex < candidateIndex + (track.loopLengthSteps ?? 16));
-              const isTrigger = step.active;
-              const isSelected = selectedTrackId === track.id && selectedStepIndex === stepIndex;
-              const label = track.mode === "keyboard" && step.active ? (step.chord && step.note ? formatChordLabel(step.note, step.chord) : step.notes?.length ? step.notes.map((note) => note.replace(/-?\d+$/, "")).join("-") : (step.note ?? track.rootNote)) : "";
-              return (
-                <button key={stepIndex} className={`step ${isTrigger ? "on" : ""} ${occupied && !isTrigger ? "loop-occupied" : ""} ${currentStep === stepIndex ? "playing" : ""} ${isSelected ? "selected-step" : ""} ${track.mode === "keyboard" ? "keyboard-step" : ""}`} onClick={(event) => { event.stopPropagation(); onToggleStep(track.id, stepIndex); }} aria-label={`${track.name} step ${stepIndex + 1}${label ? ` ${label}` : ""}`}>
-                  {label && <span>{label}</span>}
-                </button>
-              );
+              const isLoopTrack = Boolean(track.assignedSample && (track.assignedSample.type === "loop" || track.assignedSample.isLong || track.loopMode !== "oneshot")); const occupied = isLoopTrack && track.steps.some((candidate, candidateIndex) => candidate.active && stepIndex >= candidateIndex && stepIndex < candidateIndex + (track.loopLengthSteps ?? 16)); const isTrigger = step.active; const isSelected = selectedTrackId === track.id && selectedStepIndex === stepIndex; const label = track.mode === "keyboard" && step.active ? (step.chord && step.note ? formatChordLabel(step.note, step.chord) : step.notes?.length ? step.notes.map((note) => note.replace(/-?\d+$/, "")).join("-") : (step.note ?? track.rootNote)) : "";
+              return <button key={stepIndex} className={`step ${isTrigger ? "on" : ""} ${occupied && !isTrigger ? "loop-occupied" : ""} ${currentStep === stepIndex ? "playing" : ""} ${isSelected ? "selected-step" : ""} ${track.mode === "keyboard" ? "keyboard-step" : ""}`} onClick={(event) => { event.stopPropagation(); onToggleStep(track.id, stepIndex); }} aria-label={`${track.name} step ${stepIndex + 1}${label ? ` ${label}` : ""}`}>{label && <span>{label}</span>}</button>;
             })}
-          </div>
+          </div>}
         </div>
       ))}
     </div>

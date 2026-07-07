@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ChangeEvent, useMemo, useState } from "react";
 import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample, SampleCategory, SampleType } from "@/types";
 
 type SampleFilter = "all" | SampleType | SampleCategory;
-type Props = { samples: Sample[]; onPreview: (sample: Sample) => void; onAssign: (sample: Sample) => void; onRemove?: (sample: Sample) => void };
+type Props = { samples: Sample[]; selectedSampleId?: string; onSelect?: (sample: Sample) => void; onPreview: (sample: Sample) => void; onAssign: (sample: Sample) => void; onRemove?: (sample: Sample) => void; onImport?: (file: File, type: "auto" | "oneshot" | "loop") => void };
 
 function sampleStatusLabel(sample: Sample) {
   if (sample.loadStatus === "loaded") return "loaded = fully supported";
@@ -26,22 +26,24 @@ const filters: { label: string; value: SampleFilter }[] = [
   { label: "Other", value: "other" }
 ];
 
-export default function SampleLibrary({ samples, onPreview, onAssign, onRemove }: Props) {
+export default function SampleLibrary({ samples, selectedSampleId, onSelect, onPreview, onAssign, onRemove, onImport }: Props) {
   const [filter, setFilter] = useState<SampleFilter>("all");
   const [showDebug, setShowDebug] = useState(false);
+  const [importType, setImportType] = useState<"auto" | "oneshot" | "loop">("auto");
+  const importFile = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) onImport?.(file, importType); event.target.value = ""; };
   const filteredSamples = useMemo(() => samples.filter((sample) => filter === "all" || sample.type === filter || sample.category === filter), [filter, samples]);
 
   return (
     <div className="sample-library">
-      <p className="hint">If a WAV is visible but will not play, use ffmpeg manually. In-app conversion coming later.</p>
+      <p className="hint">Import WAV/MP3/OGG/FLAC samples; browser-imported and rendered samples are saved locally with IndexedDB.</p><div className="import-sample-row"><label className="field-label">Import type<select value={importType} onChange={(event) => setImportType(event.target.value as "auto" | "oneshot" | "loop")}><option value="auto">auto</option><option value="oneshot">one-shot</option><option value="loop">loop</option></select></label><label className="import-button">Import Sample<input type="file" accept=".wav,.mp3,.ogg,.flac,audio/wav,audio/mpeg,audio/ogg,audio/flac" onChange={importFile} /></label></div>
       <button type="button" className="debug-toggle" onClick={() => setShowDebug((old) => !old)}>{showDebug ? "Hide debug" : "Show debug"}</button>
       <div className="filter-row">
         {filters.map((item) => <button key={item.value} className={filter === item.value ? "active-filter" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>)}
       </div>
       <div className="sample-list">
         {filteredSamples.map((sample) => (
-          <article className="sample-row" key={sample.id}>
-            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isRendered ? " · Rendered in app" : ""}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Status: {sampleStatusLabel(sample)}</small>{sample.loadStatus === "decode failed" && <small>Found, but not WebAudio-decodable. Browser conversion is planned; use the ffmpeg helper below.</small>}{sample.source === "converted" && <small>Converted in memory from: {sample.originalPath}</small>}{sample.loadStatus === "decode failed" && <small>Helper: <code>ffmpeg -y -i input.wav -acodec pcm_s16le -ar 44100 output.wav</code></small>}{sample.loadStatus === "fetch failed" && sample.lastErrorMessage && <small>{sample.lastErrorMessage}</small>}<small>Path: {sample.path}</small>{showDebug && <div className="sample-debug"><strong>Audio file debug</strong><dl><dt>id</dt><dd>{sample.id}</dd><dt>path</dt><dd>{sample.path}</dd><dt>normalized path</dt><dd>{sample.normalizedPath ?? normalizeSamplePath(sample.path)}</dd><dt>load status</dt><dd>{sample.loadStatus ?? "not loaded"}</dd><dt>last error</dt><dd>{sample.lastErrorMessage ?? "none"}</dd></dl></div>}{sample.isRendered && <small>Rendered in app · saved locally</small>}{!(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb") && <small className="hint">Remove from disk manually (not available from the browser).</small>}</div>
+          <article className={`sample-row ${selectedSampleId === sample.id ? "selected-sample" : ""}`} key={sample.id} onClick={() => onSelect?.(sample)}>
+            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isImported ? " · Imported" : sample.isRendered ? " · Rendered in app" : " · Disk sample"}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Status: {sampleStatusLabel(sample)}</small>{sample.loadStatus === "decode failed" && <small>Found, but not WebAudio-decodable. Browser conversion is planned; use the ffmpeg helper below.</small>}{sample.source === "converted" && <small>Converted in memory from: {sample.originalPath}</small>}{sample.loadStatus === "decode failed" && <small>Helper: <code>ffmpeg -y -i input.wav -acodec pcm_s16le -ar 44100 output.wav</code></small>}{sample.loadStatus === "fetch failed" && sample.lastErrorMessage && <small>{sample.lastErrorMessage}</small>}<small>Path: {sample.path}</small>{showDebug && <div className="sample-debug"><strong>Audio file debug</strong><dl><dt>id</dt><dd>{sample.id}</dd><dt>path</dt><dd>{sample.path}</dd><dt>normalized path</dt><dd>{sample.normalizedPath ?? normalizeSamplePath(sample.path)}</dd><dt>load status</dt><dd>{sample.loadStatus ?? "not loaded"}</dd><dt>last error</dt><dd>{sample.lastErrorMessage ?? "none"}</dd></dl></div>}{sample.isImported && <small>Imported · saved locally</small>}{sample.isRendered && <small>Rendered in app · saved locally</small>}{!(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb") && <small className="hint">Remove from disk manually (not available from the browser).</small>}</div>
             <button onClick={() => onPreview(sample)}>Preview</button>
             <button onClick={() => onAssign(sample)}>Assign</button>
             {(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb") && <button onClick={() => onRemove?.(sample)}>Remove</button>}

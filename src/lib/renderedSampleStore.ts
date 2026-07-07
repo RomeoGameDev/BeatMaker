@@ -14,6 +14,8 @@ export type StoredRenderedSample = {
   createdAt: number;
   audio: Blob;
   metadata?: Record<string, unknown>;
+  isImported?: boolean;
+  sourceLabel?: "rendered" | "imported" | "converted";
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -60,9 +62,12 @@ export async function loadRenderedSamples(): Promise<Sample[]> {
     durationMs: record.durationMs,
     durationSeconds: record.durationMs ? record.durationMs / 1000 : undefined,
     path: URL.createObjectURL(record.audio),
-    isRendered: true,
     source: "indexeddb",
-    loadStatus: "loaded"
+    loadStatus: record.isImported && record.metadata?.decodeStatus === "decode failed" ? "decode failed" : "loaded",
+    lastErrorMessage: typeof record.metadata?.lastErrorMessage === "string" ? record.metadata.lastErrorMessage : undefined,
+    isRendered: !record.isImported,
+    isImported: record.isImported,
+    metadata: record.metadata
   }));
 }
 

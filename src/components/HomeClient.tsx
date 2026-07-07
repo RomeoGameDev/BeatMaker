@@ -6,21 +6,22 @@ import ArrangementPanel, { arrangementSlotCounts, type ArrangementSlotCount } fr
 import ExportPanel from "@/components/ExportPanel";
 import GuitarTools from "@/components/GuitarTools";
 import SampleLibrary from "@/components/SampleLibrary";
+import WaveformSlicer from "@/components/WaveformSlicer";
 import StepSequencer, { defaultTrackSettings, makeInitialTracks, makeSteps } from "@/components/StepSequencer";
 import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
-import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample } from "@/lib/audioEngine";
+import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion } from "@/lib/audioEngine";
 import { downloadBlob, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
 import { deleteRenderedSample, hasRenderedSample, loadRenderedSamples, saveRenderedSample } from "@/lib/renderedSampleStore";
 import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
 import { buildChord, semitoneDiff } from "@/lib/musicTheory";
 import { skins } from "@/lib/skins";
-import type { ArrangementSlot, PatternId, Sample, SequencerStep, SequencerTrack, TrackEffect, TrackSettings } from "@/types";
+import type { ArrangementSlot, PatternId, Sample, SequencerStep, SequencerTrack, Slice, TrackEffect, TrackSettings } from "@/types";
 
-type PanelId = "library" | "sequencer" | "trackControls" | "arrangement" | "export" | "guitar";
-const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", sequencer: "normal", trackControls: "normal", arrangement: "normal", export: "normal", guitar: "normal" };
+type PanelId = "library" | "slicer" | "sequencer" | "trackControls" | "arrangement" | "export" | "guitar";
+const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", slicer: "normal", sequencer: "normal", trackControls: "normal", arrangement: "normal", export: "normal", guitar: "normal" };
 type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 const cloneSteps = (steps: SequencerStep[]) => steps.map((step) => ({ ...step, notes: step.notes ? [...step.notes] : undefined }));
 const THEME_STORAGE_KEY = "beatmaker.selectedSkinId";
@@ -33,6 +34,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const [status, setStatus] = useState("Ready. Add samples to public/samples to hear audio.");
   const [selectedSkinId, setSelectedSkinId] = useState(skins[0].id);
   const [selectedTrackId, setSelectedTrackId] = useState(1);
+  const [selectedSampleId, setSelectedSampleId] = useState<string | undefined>(initialSamples[0]?.id);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | undefined>(undefined);
   const [tracks, setTracks] = useState<SequencerTrack[]>(() => makeInitialTracks(samples[0]));
   const [currentStep, setCurrentStep] = useState(0);
@@ -58,6 +60,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
 
   const selectedSkin = useMemo(() => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0], [selectedSkinId]);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId);
+  const selectedSample = samples.find((sample) => sample.id === selectedSampleId) ?? selectedTrack?.assignedSample ?? samples[0];
 
   useEffect(() => {
     const savedSkinId = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -118,10 +121,18 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }
 
   function assignSample(sample: Sample) {
+    setSelectedSampleId(sample.id);
     void ensureDuration(sample);
     setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: { ...sample, normalizedPath: sample.normalizedPath }, loopMode: (sample.type === "loop" || sample.isLong) ? "play-full" : "oneshot", loopLengthSteps: track.loopLengthSteps ?? 16, retriggerLoop: track.retriggerLoop ?? false } : track));
     setStatus(`${sample.name} assigned to Track ${selectedTrackId}.`);
   }
+
+  function toggleSliceStep(trackId: number, sliceId: string, stepIndex: number) {
+    setSelectedTrackId(trackId); setSelectedStepIndex(stepIndex);
+    setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, sliceSteps: { ...(track.sliceSteps ?? {}), [sliceId]: (track.sliceSteps?.[sliceId] ?? makeSteps(track.steps.length)).map((step, index) => index === stepIndex ? { ...step, active: !step.active } : step) } } : track));
+  }
+  function toggleMute(trackId: number) { updateTrackSettings(trackId, { mute: !tracksRef.current.find((track) => track.id === trackId)?.settings.mute }); }
+  function toggleSolo(trackId: number) { updateTrackSettings(trackId, { solo: !tracksRef.current.find((track) => track.id === trackId)?.settings.solo }); }
 
   function toggleStep(trackId: number, stepIndex: number) {
     setSelectedTrackId(trackId);
@@ -157,6 +168,21 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((step, index) => index === stepIndex ? { active: notes.length > 0, note: notes[0], notes, chord: undefined } : step) } : track));
   }
 
+  async function importSample(file: File, requestedType: "auto" | "oneshot" | "loop") {
+    const objectUrl = URL.createObjectURL(file);
+    const base = file.name.replace(/\.[^.]+$/, "");
+    const lower = base.toLowerCase();
+    const category = lower.includes("kick") ? "kick" : lower.includes("snare") ? "snare" : lower.includes("hat") || lower.includes("hihat") ? "hat" : lower.includes("clap") ? "clap" : lower.includes("perc") ? "perc" : lower.includes("bass") ? "bass" : lower.includes("guitar") ? "guitar" : lower.includes("melody") || lower.includes("melodic") || lower.includes("loop") ? "melody" : "other";
+    let durationSeconds: number | undefined; let loadStatus: Sample["loadStatus"] = "loaded"; let lastErrorMessage: string | undefined;
+    try { const meta = await decodeSampleDuration({ id: "temp", name: base, filename: file.name, type: "oneshot", category, path: objectUrl }); durationSeconds = meta.durationSeconds; } catch (error) { loadStatus = "decode failed"; lastErrorMessage = error instanceof Error ? error.message : String(error); }
+    const type = requestedType === "auto" ? ((durationSeconds ?? 0) > 2 ? "loop" : "oneshot") : requestedType;
+    const id = `imported-${Date.now()}`;
+    const sample = markSampleDuration({ id, name: base, filename: file.name, type, category, path: objectUrl, isImported: true, source: "indexeddb", createdAt: Date.now(), loadStatus, lastErrorMessage }, durationSeconds ?? 0);
+    setSamples((old) => [sample, ...old]); setSelectedSampleId(id);
+    try { await saveRenderedSample({ id, name: base, filename: file.name, type, category, durationMs: sample.durationMs, createdAt: sample.createdAt ?? Date.now(), audio: file, metadata: { source: "imported-sample", decodeStatus: loadStatus }, isImported: true }); setStatus(loadStatus === "decode failed" ? "Imported, but not WebAudio-decodable. Convert to PCM WAV for editing." : `${base} imported and saved locally.`); }
+    catch (error) { console.warn("Could not save imported sample.", error); setStatus("Imported for this session only; IndexedDB save failed."); }
+  }
+
   async function removeSample(sample: Sample) {
     if (!(sample.isRendered || sample.source === "in-app" || sample.source === "converted" || sample.source === "indexeddb")) { setStatus("Physical samples must be removed from public/samples manually."); return; }
     if (sample.source === "indexeddb" || sample.isRendered) {
@@ -168,7 +194,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     setTracks((old) => old.map((track) => {
       if (track.assignedSample?.id !== sample.id) return track;
       wasAssigned = true;
-      return { ...track, assignedSample: undefined };
+      return { ...track, assignedSample: undefined, slices: undefined, sliceSteps: undefined, mode: track.mode === "sliced" ? "oneshot" : track.mode };
     }));
     setStatus(wasAssigned ? `${sample.name} removed from local storage and unassigned from tracks.` : `${sample.name} removed from local rendered sample storage.`);
   }
@@ -255,8 +281,14 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     const activeTracks = tracksRef.current;
     const hasSolo = activeTracks.some((track) => track.settings.solo);
     activeTracks.forEach((track) => {
+      if (!track.assignedSample || track.settings.mute) return;
+      if (track.mode === "sliced") {
+        if (hasSolo && !track.settings.solo) return;
+        (track.slices ?? []).forEach((slice) => { if (!track.sliceSteps?.[slice.id]?.[step]?.active) return; void triggerSampleRegion({ sample: track.assignedSample, startMs: slice.startMs, endMs: slice.endMs, time, volume: track.settings.volume, pitchSemitones: track.settings.pitchSemitones, fadeInMs: slice.attackMs ?? slice.fadeInMs, fadeOutMs: slice.fadeOutMs, effects: track.effects }).then((result) => { if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); }).catch(() => setStatus("Skipped slice: sample could not be decoded.")); });
+        return;
+      }
       const stepData = track.steps[step];
-      if (!stepData?.active || !track.assignedSample || track.settings.mute) return;
+      if (!stepData?.active) return;
       if (hasSolo && !track.settings.solo) return;
       if (track.mode === "keyboard" && (stepData.notes?.length || stepData.chord)) {
         const chordNotes = stepData.notes?.length ? stepData.notes : buildChord(stepData.note ?? track.rootNote, stepData.chord ?? "major");
@@ -314,7 +346,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function removePattern(pattern: PatternId) { if (availablePatterns.length <= 1 || pattern === availablePatterns[0]) return; setAvailablePatterns((old) => old.filter((item) => item !== pattern)); setTimeline((old) => old.map((slot) => slot === pattern ? "" : slot)); setPatterns((old) => { const next = { ...old }; delete next[pattern]; return next; }); if (activePatternRef.current === pattern) loadPattern(availablePatterns[0]); }
   function copyPattern() { setCopiedPattern(Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)]))); setStatus(`Copied Pattern ${activePatternRef.current}.`); }
   function pastePattern() { if (!copiedPattern) return; const snapshot = copiedPattern; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: snapshot[track.id] ? cloneSteps(snapshot[track.id]) : makeSteps(track.steps.length) }))); setStatus(`Pasted copied pattern into Pattern ${activePatternRef.current}.`); }
-  function changeStepCount(count: number) { if (![4,8,16,24,32].includes(count)) return; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: Array.from({ length: count }, (_, index) => track.steps[index] ? { ...track.steps[index], notes: track.steps[index].notes ? [...track.steps[index].notes] : undefined } : { active: false }) }))); }
+  function changeStepCount(count: number) { if (![4,8,16,24,32].includes(count)) return; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: Array.from({ length: count }, (_, index) => track.steps[index] ? { ...track.steps[index], notes: track.steps[index].notes ? [...track.steps[index].notes] : undefined } : { active: false }), sliceSteps: track.sliceSteps ? Object.fromEntries(Object.entries(track.sliceSteps).map(([id, steps]) => [id, Array.from({ length: count }, (_, index) => steps[index] ? { ...steps[index] } : { active: false })])) : undefined }))); }
 
   function changeArrangementSlotCount(count: ArrangementSlotCount) {
     if (!arrangementSlotCounts.includes(count)) return;
@@ -405,6 +437,9 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not render WAV."); }
   }
 
+  async function previewSlice(slice: Slice) { if (!selectedSample) { setStatus("Select a sample first."); return; } const result = await triggerSampleRegion({ sample: selectedSample, startMs: slice.startMs, endMs: slice.endMs, time: Tone.now(), fadeInMs: slice.attackMs ?? slice.fadeInMs, fadeOutMs: slice.fadeOutMs }); setStatus(result.ok ? `Previewing ${slice.name}.` : result.message); }
+  function createSlicedTrack(sample: Sample, slices: Slice[]) { if (!slices.length) { setStatus("Create slices first."); return; } setTracks((old) => { const nextId = Math.max(0, ...old.map((track) => track.id)) + 1; const stepCount = old[0]?.steps.length ?? 16; const next = { id: nextId, name: sample.name, assignedSample: sample, steps: makeSteps(stepCount), slices: slices.map((slice) => ({ ...slice })), sliceSteps: Object.fromEntries(slices.map((slice) => [slice.id, makeSteps(stepCount)])), settings: { ...defaultTrackSettings }, mode: "sliced" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false }; setSelectedTrackId(nextId); return [...old, next]; }); setStatus(`Created sliced track from ${sample.name}.`); }
+
   async function exportCurrentPatternWav() {
     try {
       const blob = await renderPatternDryWav(tracksRef.current, bpm);
@@ -447,8 +482,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
       <div className="layout-mode-control"><span>Layout:</span><button className={layoutMode === "compact" ? "active-filter" : ""} onClick={() => setLayoutMode("compact")}>Compact Left</button><button className={layoutMode === "balanced" ? "active-filter" : ""} onClick={() => setLayoutMode("balanced")}>Balanced</button><button className={layoutMode === "wide" ? "active-filter" : ""} onClick={() => setLayoutMode("wide")}>Wide Left</button></div>
       <div className={`workspace-grid layout-${layoutMode}`}>
-        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} onRemove={removeSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /></WindowPanel></div>
-        <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
+        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => setSelectedSampleId(sample.id)} onPreview={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /></WindowPanel><WindowPanel title="Waveform / Slicer" state={panels.slicer} onStateChange={(state) => setPanelState("slicer", state)}><WaveformSlicer selectedSample={selectedSample} onEnsureDuration={ensureDuration} onPreviewSample={previewSample} onPreviewSlice={previewSlice} onStopPreview={stopSequencer} onCreateSlicedTrack={createSlicedTrack} onStatus={setStatus} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /></WindowPanel></div>
+        <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onToggleSliceStep={toggleSliceStep} onToggleMute={toggleMute} onToggleSolo={toggleSolo} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
         <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
       </div>

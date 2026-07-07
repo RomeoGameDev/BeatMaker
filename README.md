@@ -209,3 +209,42 @@ Limitations:
 - The browser cannot delete or overwrite old files in `public/samples` without a backend.
 - To permanently use a converted sample, run ffmpeg manually and place the WAV in `public/samples/oneshots/` or `public/samples/loops/`.
 
+
+## Waveform / Slicer, imports, and track mute/solo
+
+### Importing custom samples
+- Use **Sample Library → Import Sample** to load `.wav`, `.mp3`, `.ogg`, or `.flac` files from your browser.
+- Imported samples are saved in the browser with IndexedDB, so they survive refresh/F5 in the same browser profile.
+- The import type can be forced to **one-shot** or **loop**, or left as **auto**. Auto treats files longer than 2 seconds as loops.
+- Imported, rendered, and converted in-app samples show local-storage labels and can be removed from the app. Removing deletes the IndexedDB record, revokes the object URL for the current session, and unassigns that sample from tracks.
+- Disk samples from `public/samples` cannot be deleted by browser-only code; remove those files manually or add a backend later.
+- If a file imports but WebAudio cannot decode it, it remains in the library for browser preview fallback and shows: “Imported, but not WebAudio-decodable. Convert to PCM WAV for editing.”
+
+### Waveform / Slicer workflow
+1. Select a sample in the Sample Library.
+2. Open **Waveform / Slicer** to see the decoded waveform.
+3. Choose an equal split size: 2, 4, 8, or 16.
+4. Click **Split** to create slices such as `1/4`, `2/4`, `3/4`, `4/4`.
+5. Each slice stores start/end milliseconds plus attack/fade values.
+6. Preview individual slices, clear/remove slices, then click **Create Sliced Track**.
+7. The Step Sequencer adds one parent sliced track with a row for each slice. Trigger each slice independently on steps.
+
+Manual drag slicing and transient detection are planned later; the MVP focuses on reliable equal-split slicing and numeric attack/fade editing.
+
+### Mute and Solo
+- Mute and Solo controls now live directly on each Step Sequencer track header.
+- Muted tracks stay visible/editable but do not play or export.
+- If any track is soloed, only soloed tracks play/export. Multiple tracks may be soloed.
+- This applies to one-shot, keyboard, loop, and sliced tracks. Track Controls now focuses on sound settings, region controls, pitch/volume, and FX rather than row-level mute/solo.
+
+### Export status
+- **Export Current Pattern WAV** renders the current pattern mix dry and respects mute/solo. It includes one-shot, keyboard, loop, sliced, imported, and rendered samples when WebAudio can decode them.
+- **Export Arrangement WAV** is intentionally disabled with a coming-soon message until arrangement rendering is stable.
+- **Export Stems ZIP** is intentionally disabled with a coming-soon message until stem packaging is implemented.
+- FX export may be dry for now; full FX rendering in export is a later pass.
+
+### Current limitations
+- Manual drag handles for slice boundaries are not implemented yet.
+- Transient detection / auto-chop is not implemented yet.
+- Some export paths are dry if FX offline rendering is unavailable.
+- Browser-only apps cannot save imported files into `public/samples` or delete physical disk samples without a backend.
