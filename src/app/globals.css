@@ -226,3 +226,22 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .tab-scratchpad { width:100%; min-height:7rem; background:#050507; color:var(--color-accent); border:1px solid var(--color-border); border-radius:var(--control-radius, 6px); padding:.55rem; font-family:"Courier New", monospace; }
 .guitar-tools .field-label { display:grid; align-items:stretch; gap:.25rem; }
 .guitar-tools .field-label select { width:100%; }
+.layout-mode-control { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; margin:-.4rem 0 1rem; font-size:.78rem; text-transform:uppercase; }
+.layout-mode-control span { color:var(--color-accent); font-weight:700; }
+.workspace-grid.layout-compact { grid-template-columns:minmax(220px, .75fr) minmax(460px, 2.25fr); }
+.workspace-grid.layout-balanced { grid-template-columns:minmax(260px, 1fr) minmax(420px, 2fr); }
+.workspace-grid.layout-wide { grid-template-columns:minmax(360px, 1.35fr) minmax(420px, 1.65fr); }
+.guitar-tools { max-height:calc(100vh - 9rem); overflow-y:auto; padding-right:.25rem; }
+.fretboard { border:1px solid var(--color-border); border-radius:var(--control-radius, 8px); background:linear-gradient(90deg, rgba(92,58,28,.45), rgba(142,91,42,.32)); padding:.4rem; overflow-x:auto; }
+.fret-numbers, .fret-markers, .fret-string { display:grid; grid-template-columns:1.6rem repeat(13, minmax(2rem, 1fr)); gap:.12rem; align-items:center; min-width:31rem; }
+.fret-numbers span { text-align:center; font-size:.62rem; color:var(--color-muted); }
+.fret-markers { min-height:.7rem; }
+.marker-cell { display:flex; align-items:center; justify-content:center; gap:.12rem; }
+.marker-cell i { width:.34rem; height:.34rem; border-radius:50%; display:block; background:color-mix(in srgb, var(--color-accent), white 20%); opacity:.7; box-shadow:0 0 6px color-mix(in srgb, var(--color-accent), transparent 45%); }
+.fret.open { background:color-mix(in srgb, var(--color-panel), white 12%); border-left:3px solid color-mix(in srgb, var(--color-accent), white 20%); font-weight:800; }
+.fret.active { border-color:color-mix(in srgb, var(--color-accent), transparent 20%); color:var(--color-accent); background:color-mix(in srgb, var(--color-accent), transparent 88%); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--color-accent), transparent 70%); }
+.fret.selected { border-color:#fff56a; color:#111; background:#fff56a; font-weight:900; box-shadow:0 0 12px color-mix(in srgb, #fff56a, transparent 20%); transform:translateY(-1px); }
+.piano-key.active:not(.selected) { outline:1px solid color-mix(in srgb, var(--color-accent), transparent 20%); color:var(--color-accent); }
+.debug-toggle { margin-bottom:.55rem; padding:.25rem .45rem; font-size:.72rem; }
+.sample-row { grid-template-columns:1fr auto auto auto; }
+@media (max-width: 900px) { .workspace-grid.layout-compact, .workspace-grid.layout-balanced, .workspace-grid.layout-wide { grid-template-columns:1fr; } .guitar-tools { max-height:none; } }

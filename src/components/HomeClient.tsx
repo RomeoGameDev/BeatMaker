@@ -23,6 +23,8 @@ const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", seq
 type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 const cloneSteps = (steps: SequencerStep[]) => steps.map((step) => ({ ...step, notes: step.notes ? [...step.notes] : undefined }));
 const THEME_STORAGE_KEY = "beatmaker.selectedSkinId";
+const LAYOUT_STORAGE_KEY = "beatmaker.layoutMode";
+type LayoutMode = "compact" | "balanced" | "wide";
 
 export default function HomeClient({ samples: initialSamples }: { samples: Sample[] }) {
   const [samples, setSamples] = useState<Sample[]>(initialSamples);
@@ -35,6 +37,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [panels, setPanels] = useState<Record<PanelId, WindowPanelState>>(normalPanels);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("balanced");
   const schedulerIdRef = useRef<number | null>(null);
   const arrangementTimerRef = useRef<number | null>(null);
   const tracksRef = useRef(tracks);
@@ -57,8 +60,11 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   useEffect(() => {
     const savedSkinId = window.localStorage.getItem(THEME_STORAGE_KEY);
     if (savedSkinId && skins.some((skin) => skin.id === savedSkinId)) setSelectedSkinId(savedSkinId);
+    const savedLayout = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (savedLayout === "compact" || savedLayout === "balanced" || savedLayout === "wide") setLayoutMode(savedLayout);
   }, []);
   useEffect(() => { window.localStorage.setItem(THEME_STORAGE_KEY, selectedSkin.id); }, [selectedSkin.id]);
+  useEffect(() => { window.localStorage.setItem(LAYOUT_STORAGE_KEY, layoutMode); }, [layoutMode]);
   useEffect(() => { setBpm(bpm); }, [bpm]);
   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
   useEffect(() => { patternsRef.current = patterns; }, [patterns]);
@@ -134,6 +140,19 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }
   function updateStepNotes(trackId: number, stepIndex: number, notes: string[]) {
     setTracks((oldTracks) => oldTracks.map((track) => track.id === trackId ? { ...track, steps: track.steps.map((step, index) => index === stepIndex ? { active: notes.length > 0, note: notes[0], notes, chord: undefined } : step) } : track));
+  }
+
+  function removeSample(sample: Sample) {
+    if (!(sample.isRendered || sample.source === "in-app")) { setStatus("Physical samples must be removed from public/samples manually."); return; }
+    if (sample.path.startsWith("blob:")) URL.revokeObjectURL(sample.path);
+    setSamples((old) => old.filter((item) => item.id !== sample.id));
+    let wasAssigned = false;
+    setTracks((old) => old.map((track) => {
+      if (track.assignedSample?.id !== sample.id) return track;
+      wasAssigned = true;
+      return { ...track, assignedSample: undefined };
+    }));
+    setStatus(wasAssigned ? `${sample.name} removed and unassigned from tracks.` : `${sample.name} removed from the in-app Sample Library.`);
   }
 
   function addTrack() {
@@ -354,7 +373,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       const suffix = variant === "dry" ? "dry" : "processed";
       const baseName = `${safeFilename(track.assignedSample?.name ?? "sample")}-rendered-${Date.now()}`;
       const objectUrl = URL.createObjectURL(blob);
-      const rendered = markSampleDuration({ id: `rendered-${Date.now()}`, name: `${track.assignedSample?.name ?? "sample"}_rendered`, filename: `${baseName}.wav`, type: track.assignedSample?.type ?? "oneshot", category: "rendered", path: objectUrl, isRendered: true }, blob.size ? (track.assignedSample?.durationSeconds ?? 0) : 0);
+      const rendered = markSampleDuration({ id: `rendered-${Date.now()}`, name: `${track.assignedSample?.name ?? "sample"}_rendered`, filename: `${baseName}.wav`, type: track.assignedSample?.type ?? "oneshot", category: "rendered", path: objectUrl, isRendered: true, source: "in-app" }, blob.size ? (track.assignedSample?.durationSeconds ?? 0) : 0);
       setSamples((old) => [rendered, ...old]);
       if (variant === "dry") downloadBlob(blob, `${baseName}.wav`);
       setStatus(variant === "dry" ? "Rendered new sample and downloaded WAV. FX rendering into new sample coming soon." : "Rendered new sample in the Sample Library. FX rendering into new sample coming soon.");
@@ -384,8 +403,9 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   return (
     <main className="app-shell" style={themeStyle}>
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onResetLayout={() => setPanels(normalPanels)} />
-      <div className="workspace-grid">
-        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={(sample) => setSamples((old) => [sample, ...old])} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
+      <div className="layout-mode-control"><span>Layout:</span><button className={layoutMode === "compact" ? "active-filter" : ""} onClick={() => setLayoutMode("compact")}>Compact Left</button><button className={layoutMode === "balanced" ? "active-filter" : ""} onClick={() => setLayoutMode("balanced")}>Balanced</button><button className={layoutMode === "wide" ? "active-filter" : ""} onClick={() => setLayoutMode("wide")}>Wide Left</button></div>
+      <div className={`workspace-grid layout-${layoutMode}`}>
+        <div className="left-column"><WindowPanel title="Sample Library" state={panels.library} onStateChange={(state) => setPanelState("library", state)} className="sample-window"><SampleLibrary samples={samples} onPreview={previewSample} onAssign={assignSample} onRemove={removeSample} /></WindowPanel><WindowPanel title="Guitar Tools" state={panels.guitar} onStateChange={(state) => setPanelState("guitar", state)}><GuitarTools samples={samples} bpm={bpm} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={(sample) => setSamples((old) => [sample, ...old])} onStatus={setStatus} /></WindowPanel><WindowPanel title="Export" state={panels.export} onStateChange={(state) => setPanelState("export", state)}><ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onComingSoon={(feature) => setStatus(`Coming soon: ${feature}`)} /></WindowPanel></div>
         <div className="main-column"><WindowPanel title="Step Sequencer" state={panels.sequencer} onStateChange={(state) => setPanelState("sequencer", state)} className="sequencer-window"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} /></WindowPanel>
         <WindowPanel title="Track Controls" state={panels.trackControls} onStateChange={(state) => setPanelState("trackControls", state)}><TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPreview={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={playheadMs} /></WindowPanel>
         <WindowPanel title="Arrangement" state={panels.arrangement} onStateChange={(state) => setPanelState("arrangement", state)}><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
