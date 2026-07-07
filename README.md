@@ -134,22 +134,19 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 
 ## Guitar Tools
 
-Guitar Tools is now an independent **Guitar / Chord / Riff Lab** in the left column. It does not change the selected Track Controls sample when you choose a Guitar Tools source sample.
+Guitar Tools currently supports **chords/stabs**. Riff mode, sequential note/riff UI, **Generate Tab from Riff**, **Render Riff**, and riff preview are hidden for now; riff tools are planned later.
 
 Workflow:
 
 1. Select a **Source Sample** from discovered one-shots, loops, or rendered in-app samples.
-2. Choose **Chord** mode for simultaneous notes or **Riff** mode for notes played in order.
-3. Click notes on the compact piano or toggle cells on the 0-12 fret standard-tuning fretboard (`E A D G B e`).
-4. Preview selected notes, the Chord Helper chord, or the root note using the source sample and current app BPM.
-5. Add optional **Guitar Lab FX**. Preview supports safe mini FX routing where available; render currently applies volume and pitch offset, with time/modulation FX marked as TODO/bypass.
-6. Render to a new in-app sample, render and download a WAV, or send the chord/riff to the selected sequencer step.
+2. Choose notes with the Chord Helper, compact piano, or the 0-12 fret standard-tuning fretboard (`E A D G B e`).
+3. Preview selected notes or the Chord Helper chord using the source sample and current app BPM.
+4. Add optional **Guitar Lab FX**. Preview supports safe mini FX routing where available; render currently applies volume and pitch offset, with time/modulation FX marked as TODO/bypass.
+5. Render the chord/stab to a new locally saved rendered sample, or send the chord/selected notes to the selected Keyboard-mode sequencer step.
 
-Chord mode writes the selected notes to the selected Keyboard-mode step. Riff mode writes notes across consecutive steps and stops at the last available step if it would overflow. If the selected track is not in Keyboard mode, Guitar Tools prompts you to switch modes first.
+Rendered Guitar Tools samples appear in Sample Library immediately, are saved locally in browser IndexedDB, survive refresh, remain previewable/assignable after reload, and can be removed from Sample Library.
 
-Rendered Guitar Lab samples appear in Sample Library immediately during the current session and can be previewed or assigned like other rendered samples. Browser limitation: the app cannot write generated files into `public/samples` without a backend. Use **Render + Download WAV** to keep a permanent copy, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
-
-The old manual Tab Scratchpad is now a collapsed **Generated Tab** output area. It generates copyable ASCII tab from selected fretboard notes or riffs instead of acting as the main tab editor.
+The old manual Tab Scratchpad is now a collapsed **Generated Tab** output area. It generates copyable ASCII tab from selected fretboard notes. If notes only came from the piano/chord helper, it asks you to select notes on the fretboard to generate exact tab.
 
 ## Playback, Loops, and Rendered Samples
 
@@ -160,9 +157,10 @@ The old manual Tab Scratchpad is now a collapsed **Generated Tab** output area. 
 - **Loop retrigger behavior.** Retrigger Loop is off by default to prevent overlapping long loops on the same track. Turning it on stops the previous loop on that track and restarts from the new trigger.
 - **Dynamic sample trim ranges.** The browser decodes sample duration when a sample is previewed, assigned, or selected. Start Offset and End Trim ranges expand to the actual sample length, while Fade In/Out allow up to the shorter of the sample length or 5000 ms. If duration is not loaded yet, the app uses safe fallback ranges.
 - **Render to New Sample.** Track Controls can render the selected track's current sample into a new in-app sample using trim, fade, pitch, and volume. FX rendering into the new sample is not included yet; normal playback FX remain unchanged.
-- **Download rendered WAVs for permanence.** Rendered in-app samples work immediately in the current session and appear in Sample Library, but browser apps cannot write directly into `public/samples` without a backend. Use **Render to New Sample + Download WAV** for permanent saving, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
+- **Rendered sample persistence.** Rendered in-app samples are saved locally in this browser via IndexedDB. They survive F5/page reload, are previewable/assignable after reload, and can be removed from Sample Library. Removing a rendered sample deletes it from IndexedDB, revokes its object URL, and unassigns it from tracks safely.
+- **Physical sample files.** Browser apps cannot delete files in `public/samples`; remove physical sample files from disk manually.
 - **Arrangement slot count.** Arrangement timelines can be resized to 4, 8, 16, 24, 32, or 64 slots. Increasing adds empty slots; decreasing truncates only the extra slots, and Project JSON saves both the slot count and slot contents.
-- **Project JSON limitation.** Project JSON can store rendered sample metadata, but it cannot persist the temporary blob/object URL audio after refresh. Download rendered samples before closing or refreshing the page.
+- **Project JSON and rendered samples.** Project JSON stores rendered sample references/metadata, but not raw audio blobs. Rendered audio remains local to this browser in IndexedDB; import reconnects samples that exist locally and warns when a referenced rendered sample is missing.
 
 ### Audio troubleshooting: browser-decodable WAVs
 
@@ -187,40 +185,27 @@ For example, if `public/samples/oneshots/kick01.wav` is decode-failed but `kick0
 
 - Guitar Tools now uses one shared selected-notes state for both the fretboard and piano keyboard, so selecting a note in either view highlights it in both places where that exact note appears.
 - The fretboard is a compact visual helper with fret numbers 0–12, single marker dots on frets 3, 5, 7, and 9, and a double marker at fret 12. Open strings use a distinct nut/open-string style.
-- The Generated Tab section is collapsed by default and provides Generate from Selected Notes, Generate from Riff, Copy, and Clear actions.
+- The Generated Tab section is collapsed by default and provides Generate from Selected Notes, Copy, and Clear actions.
 - Sample Library audio-file debug details are hidden by default after refresh and can be opened with the Show debug toggle.
-- Rendered/in-app samples are marked as removable and can be removed from the in-memory Sample Library. Object URLs are revoked when removed.
+- Rendered/in-app samples are marked as removable and are saved in IndexedDB. Object URLs are revoked when removed.
 - Physical files in `public/samples` cannot be deleted from the browser without a backend; remove those from disk manually.
 - The workspace includes Compact Left, Balanced, and Wide Left layout modes, persisted in localStorage, to make the left Guitar Tools column easier to work with.
 
 
 ## Generated Tab workflow
 
-Guitar Tools includes a collapsed-by-default **Generated Tab** section. It is output-only: select notes by clicking fretboard cells, then use **Generate Tab from Selected Notes** for a chord-style vertical stack or **Generate Tab from Riff** for sequential notes across the strings. Use **Copy Tab to Clipboard** to copy the ASCII tab. If you only click piano keys, the app asks you to select fretboard positions first so it can preserve exact string/fret choices.
+Guitar Tools includes a collapsed-by-default **Generated Tab** section. It is output-only: select notes by clicking fretboard cells, then use **Generate Tab from Selected Notes** for a chord-style vertical stack. Use **Copy Tab to Clipboard** to copy the ASCII tab; the app uses `navigator.clipboard.writeText` when available and falls back to selecting the textarea plus `document.execCommand("copy")`. If you only click piano keys or use the chord helper, the app asks you to select fretboard positions first so it can preserve exact string/fret choices.
 
 ## Browser PCM WAV conversion workflow
 
-When a sample is found but WebAudio cannot decode it, Sample Library keeps the manual helper command visible and also shows **Try Convert to PCM WAV** plus **Convert + Download PCM WAV**. Conversion lazy-loads ffmpeg.wasm only after you click the button; it is not loaded at app startup. Successful conversion creates a new in-memory sample with a `converted-<timestamp>` id, `_pcm.wav` filename, the original type/category, and a blob URL path so you can preview, assign, and remove it from the in-app library.
+Browser conversion is planned. The broken in-app conversion buttons are hidden for now. When a sample is found but WebAudio cannot decode it, Sample Library keeps this manual helper command visible:
+
+```bash
+ffmpeg -y -i input.wav -acodec pcm_s16le -ar 44100 output.wav
+```
 
 Limitations:
 
-- Converted audio is in memory until downloaded.
 - The browser cannot delete or overwrite old files in `public/samples` without a backend.
-- To permanently use a converted sample, download it and place the WAV in `public/samples/oneshots/` or `public/samples/loops/`.
-- If ffmpeg.wasm cannot load or convert the file, the app shows a friendly failure status and the manual `ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav` workflow remains available.
+- To permanently use a converted sample, run ffmpeg manually and place the WAV in `public/samples/oneshots/` or `public/samples/loops/`.
 
-## Export / Import workflow
-
-The Export panel now has no dead buttons:
-
-- **Export Project JSON** downloads a JSON project containing tracks, patterns, arrangement slots and slot count, BPM, selected theme id, step count, track/FX settings, chord/note data, sample references, and rendered/converted sample metadata when available.
-- **Import Project JSON** safely reads a JSON project and restores BPM, theme, tracks, patterns, and arrangement data. Missing sample references warn through status text instead of crashing.
-- **Export Current Pattern WAV** renders the active pattern dry in the browser and downloads `dusty-current-pattern.wav` using current BPM, pattern steps, tracks, sample regions, volume, and pitch. FX export is still coming soon, so the status says the pattern was exported dry.
-- **Export Arrangement WAV** and **Export Stems ZIP** currently show clear coming-soon statuses rather than silently doing nothing.
-
-Export limitations:
-
-- Project JSON does not embed huge audio blobs.
-- Rendered and converted in-memory audio is not persisted after refresh unless downloaded.
-- FX may not render into exported WAVs yet.
-- Arrangement WAV and Stems ZIP export are currently coming soon.
