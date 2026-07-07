@@ -140,3 +140,12 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 - **Download rendered WAVs for permanence.** Rendered in-app samples work immediately in the current session and appear in Sample Library, but browser apps cannot write directly into `public/samples` without a backend. Use **Render to New Sample + Download WAV** for permanent saving, then manually move the downloaded WAV into `public/samples/oneshots` or `public/samples/loops` if you want it discovered on the next app start.
 - **Arrangement slot count.** Arrangement timelines can be resized to 4, 8, 16, 24, 32, or 64 slots. Increasing adds empty slots; decreasing truncates only the extra slots, and Project JSON saves both the slot count and slot contents.
 - **Project JSON limitation.** Project JSON can store rendered sample metadata, but it cannot persist the temporary blob/object URL audio after refresh. Download rendered samples before closing or refreshing the page.
+
+### Recommended WAV format
+
+If a WAV is visible in the Sample Library but will not play, convert it to a browser-friendly PCM WAV. Recommended formats:
+
+- PCM WAV
+- 16-bit or 24-bit
+- 44.1 kHz or 48 kHz
+- mono or stereo

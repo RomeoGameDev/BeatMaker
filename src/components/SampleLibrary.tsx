@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample, SampleCategory, SampleType } from "@/types";
 
 type SampleFilter = "all" | SampleType | SampleCategory;
@@ -24,13 +25,14 @@ export default function SampleLibrary({ samples, onPreview, onAssign }: Props) {
 
   return (
     <div className="sample-library">
+      <p className="hint">If a WAV is visible but will not play, convert it to PCM WAV.</p>
       <div className="filter-row">
         {filters.map((item) => <button key={item.value} className={filter === item.value ? "active-filter" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>)}
       </div>
       <div className="sample-list">
         {filteredSamples.map((sample) => (
           <article className="sample-row" key={sample.id}>
-            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isRendered ? " · Rendered in app" : ""}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Path: {sample.path}</small></div>
+            <div><strong>{sample.name}</strong><small>File: {sample.filename}</small><small>Type: {sample.type} · Category: {sample.category}{sample.isRendered ? " · Rendered in app" : ""}</small><small>Duration: {sample.durationSeconds ? `${sample.durationSeconds.toFixed(2)}s` : "Duration not loaded yet"}</small><small>Load: {sample.loadStatus ?? "not loaded"}{sample.lastErrorMessage ? ` · ${sample.lastErrorMessage}` : ""}</small><small>Path: {sample.path}</small><details className="sample-debug"><summary>Audio file debug</summary><dl><dt>id</dt><dd>{sample.id}</dd><dt>name</dt><dd>{sample.name}</dd><dt>type</dt><dd>{sample.type}</dd><dt>category</dt><dd>{sample.category}</dd><dt>filename</dt><dd>{sample.filename}</dd><dt>path</dt><dd>{sample.path}</dd><dt>normalizedPath</dt><dd>{sample.normalizedPath ?? normalizeSamplePath(sample.path)}</dd><dt>durationMs / durationSeconds</dt><dd>{sample.durationMs ?? "not loaded"} / {sample.durationSeconds ?? "not loaded"}</dd><dt>load status</dt><dd>{sample.loadStatus ?? "not loaded"}</dd><dt>last error</dt><dd>{sample.lastErrorMessage ?? "none"}</dd></dl></details></div>
             <button onClick={() => onPreview(sample)}>Preview</button>
             <button onClick={() => onAssign(sample)}>Assign</button>
           </article>

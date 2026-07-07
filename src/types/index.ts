@@ -23,6 +23,9 @@ export type Sample = {
   durationMs?: number;
   isLong?: boolean;
   isRendered?: boolean;
+  normalizedPath?: string;
+  loadStatus?: import("@/lib/sampleLoader").SampleLoadStatus;
+  lastErrorMessage?: string;
 };
 
 export type Skin = {
