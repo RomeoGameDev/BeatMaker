@@ -182,3 +182,14 @@ Recommended formats:
 - mono or stereo
 
 For example, if `public/samples/oneshots/kick01.wav` is decode-failed but `kick01_pcm.wav` works, keep using the PCM version for editing/sequencing or replace the original with a converted PCM WAV.
+
+## Guitar Tools cleanup notes
+
+- Guitar Tools now uses one shared selected-notes state for both the fretboard and piano keyboard, so selecting a note in either view highlights it in both places where that exact note appears.
+- The fretboard is a compact visual helper with fret numbers 0–12, single marker dots on frets 3, 5, 7, and 9, and a double marker at fret 12. Open strings use a distinct nut/open-string style.
+- The Tab Scratchpad is a collapsed utility by default and keeps simple Clear Tab, Insert Chord Name, and Copy Tab to Clipboard actions.
+- Sample Library audio-file debug details are hidden by default after refresh and can be opened with the Show debug toggle.
+- Rendered/in-app samples are marked as removable and can be removed from the in-memory Sample Library. Object URLs are revoked when removed.
+- Physical files in `public/samples` cannot be deleted from the browser without a backend; remove those from disk manually.
+- The workspace includes Compact Left, Balanced, and Wide Left layout modes, persisted in localStorage, to make the left Guitar Tools column easier to work with.
+
