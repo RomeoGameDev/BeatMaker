@@ -43,21 +43,21 @@ Supported extensions are `.wav`, `.mp3`, `.ogg`, and `.flac`. Categories are gue
 
 Workstation Music now uses a denser, DAW-style layout:
 
-- **Top toolbar:** app title, global Play/Stop, BPM, skin selector, layout mode, compact button/step toggles, helper text toggle, GUI scale controls, and Reset Layout.
+- **Top toolbar:** app title, global Play/Stop, BPM, skin selector, layout mode, Font size (Small / Normal / Large), helper text toggle, and Reset Layout.
 - **Library / Export tabs:** Sample Library and Export share the left tool area.
 - **Tools tabs:** Track Controls, Waveform / Slicer, and Guitar Tools share the central tool area.
-- **Arrangement:** remains visible as its own standalone panel.
+- **Arrangement:** is grouped as a compact strip directly above the Step Sequencer.
 - **Step Sequencer:** spans the full width at the bottom and can scroll horizontally for longer patterns.
 
 Window minimize/maximize controls were removed from panel title bars. Collapsible sections inside panels, such as Region and Loop Controls, remain available.
 
 ### Persisted UI preferences
 
-The browser remembers these settings in `localStorage`: selected skin, GUI scale, layout mode, compact button mode, compact step mode, helper text visibility, and the selected Library/Export and Tools tabs.
+The browser remembers these settings in `localStorage`: selected skin, font size, layout mode, helper text visibility, and the selected Library/Export and Tools tabs.
 
-### GUI scale and density
+### Font size and density
 
-The toolbar GUI scale supports **75%, 85%, 90%, 100%, 110%, 125%, and 150%**. Layout modes are **Compact**, **Balanced**, and **Spacious**. Compact Buttons and Compact Steps reduce control padding and step row height for dense sessions.
+The toolbar Font setting supports **Small**, **Normal**, and **Large**. Small makes text and controls denser, Normal is the default, and Large improves readability. The selected font size is persisted in `localStorage` and applied with `font-small`, `font-normal`, and `font-large` CSS classes. Layout modes remain **Compact**, **Balanced**, and **Spacious**; button and step compactness now follows the active layout/font CSS instead of a persistent Compact Buttons toolbar option.
 
 ### Helper text toggle
 
@@ -90,13 +90,13 @@ Browser limitation: rendered files download to your computer. They do **not** au
 
 ## Step Sequencer
 
-The full-width bottom Step Sequencer edits the active pattern and exposes quick per-track volume and pitch controls in each track header. It supports dynamic tracks, step playback, keyboard mode, and chord mode.
+The full-width bottom Step Sequencer edits the active pattern with compact tracker-style step blocks and exposes quick per-track volume and pitch controls on the right side of each track row. It supports dynamic tracks, step playback, keyboard mode, and chord mode.
 
 Step count can be changed per active pattern using allowed values **4, 8, 16, 24, and 32**. Increasing the step count adds inactive steps. Decreasing the step count truncates extra steps while preserving earlier hits. Sequencer playback uses the current active pattern's step count.
 
 ## Arrangement
 
-Arrangement is simplified around patterns:
+Arrangement is visually grouped with the Step Sequencer as a compact strip directly above the main step grid and is simplified around patterns:
 
 - The app starts with **Pattern A**.
 - **Add Pattern** creates the next pattern with empty steps for all tracks.
@@ -272,3 +272,14 @@ All Play buttons are exclusive: starting Sample Library, Track Controls, Wavefor
 Sample Library is compact by default. Rows show the sample name, type/category badges, Play, Assign, and local Remove only when the sample is imported/rendered/local. Expand a row or switch to Detailed mode to see filename, duration, status, path, conversion helper text, and debug info. Disk samples still cannot be destructively removed from the browser.
 
 Export moved next to Sample Library in the **Library / Export** tabs. Export Current Pattern Mix WAV, Project JSON export, and Project JSON import remain active. Arrangement WAV and Stems ZIP stay disabled with clear Coming Soon labels until implemented.
+
+
+## 2026 compact layout cleanup
+
+- GUI scale +/- controls, percentage display, reset scale icon, and the persistent Compact Buttons toolbar option were removed. Font size now uses Small / Normal / Large and persists via `localStorage` with `font-small`, `font-normal`, and `font-large` classes.
+- The Step Sequencer now uses a denser tracker/drum-machine style with smaller flatter cells, compact step numbers, current-step outlines, and right-side vertical Vol/Pitch/Mute/Solo/Remove controls.
+- Fresh projects start with **2 tracks**. Track 1 and Track 2 use different default colors, new tracks cycle through a color palette, and project JSON preserves track colors.
+- Arrangement is grouped directly above Step Sequencer so pattern slots and step editing share one lower workspace level.
+- Sample Library rows are compact list items with small Play/Assign/Remove buttons, truncated names, expandable details/debug information, and a scrolling list container.
+- Export remains beside Sample Library but uses compact spacing and small action buttons.
+- Old panel maximize/minimize/close icons are not used; only purposeful collapsible section arrows/details remain.

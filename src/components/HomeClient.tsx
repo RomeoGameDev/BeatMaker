@@ -7,10 +7,10 @@ import ExportPanel from "@/components/ExportPanel";
 import GuitarTools from "@/components/GuitarTools";
 import SampleLibrary from "@/components/SampleLibrary";
 import WaveformSlicer from "@/components/WaveformSlicer";
-import StepSequencer, { defaultTrackSettings, makeInitialTracks, makeSteps } from "@/components/StepSequencer";
+import StepSequencer, { defaultTrackSettings, getTrackColor, makeInitialTracks, makeSteps } from "@/components/StepSequencer";
 import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
-import WindowPanel, { WindowPanelState } from "@/components/WindowPanel";
+import WindowPanel from "@/components/WindowPanel";
 import TabbedPanel from "@/components/TabbedPanel";
 import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion, playSampleRegionExclusive } from "@/lib/audioEngine";
 import { downloadBlob, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
@@ -21,15 +21,11 @@ import { buildChord, semitoneDiff } from "@/lib/musicTheory";
 import { skins } from "@/lib/skins";
 import type { ArrangementSlot, PatternId, Sample, SequencerStep, SequencerTrack, Slice, TrackEffect, TrackSettings } from "@/types";
 
-type PanelId = "library" | "slicer" | "sequencer" | "trackControls" | "arrangement" | "export" | "guitar";
-const normalPanels: Record<PanelId, WindowPanelState> = { library: "normal", slicer: "normal", sequencer: "normal", trackControls: "normal", arrangement: "normal", export: "normal", guitar: "normal" };
 type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 const cloneSteps = (steps: SequencerStep[]) => steps.map((step) => ({ ...step, notes: step.notes ? [...step.notes] : undefined }));
 const THEME_STORAGE_KEY = "beatmaker.selectedSkinId";
 const LAYOUT_STORAGE_KEY = "beatmaker.layoutMode";
-const GUI_SCALE_STORAGE_KEY = "beatmaker.guiScale";
-const BUTTON_STYLE_STORAGE_KEY = "beatmaker.compactButtons";
-const STEP_STYLE_STORAGE_KEY = "beatmaker.compactSteps";
+const FONT_SIZE_STORAGE_KEY = "beatmaker.fontSize";
 const HELPERS_STORAGE_KEY = "beatmaker.showHelpers";
 const LIBRARY_TAB_STORAGE_KEY = "beatmaker.libraryTab";
 const TOOL_TAB_STORAGE_KEY = "beatmaker.toolTab";
@@ -49,11 +45,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const [tracks, setTracks] = useState<SequencerTrack[]>(() => makeInitialTracks(samples[0]));
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [panels, setPanels] = useState<Record<PanelId, WindowPanelState>>(normalPanels);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("balanced");
-  const [guiScale, setGuiScale] = useState(100);
-  const [compactButtons, setCompactButtons] = useState(false);
-  const [compactSteps, setCompactSteps] = useState(true);
+  const [fontSize, setFontSize] = useState<"small" | "normal" | "large">("normal");
   const [showHelpers, setShowHelpers] = useState(true);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("trackControls");
@@ -83,10 +76,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     if (savedSkinId && skins.some((skin) => skin.id === savedSkinId)) setSelectedSkinId(savedSkinId);
     const savedLayout = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
     if (savedLayout === "compact" || savedLayout === "balanced" || savedLayout === "spacious") setLayoutMode(savedLayout);
-    const savedScale = Number(window.localStorage.getItem(GUI_SCALE_STORAGE_KEY));
-    if ([75, 85, 90, 100, 110, 125, 150].includes(savedScale)) setGuiScale(savedScale);
-    setCompactButtons(window.localStorage.getItem(BUTTON_STYLE_STORAGE_KEY) === "true");
-    setCompactSteps(window.localStorage.getItem(STEP_STYLE_STORAGE_KEY) !== "false");
+    const savedFontSize = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+    if (savedFontSize === "small" || savedFontSize === "normal" || savedFontSize === "large") setFontSize(savedFontSize);
     setShowHelpers(window.localStorage.getItem(HELPERS_STORAGE_KEY) !== "false");
     const savedLibraryTab = window.localStorage.getItem(LIBRARY_TAB_STORAGE_KEY);
     if (savedLibraryTab === "library" || savedLibraryTab === "export") setLibraryTab(savedLibraryTab);
@@ -95,9 +86,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }, []);
   useEffect(() => { window.localStorage.setItem(THEME_STORAGE_KEY, selectedSkin.id); }, [selectedSkin.id]);
   useEffect(() => { window.localStorage.setItem(LAYOUT_STORAGE_KEY, layoutMode); }, [layoutMode]);
-  useEffect(() => { window.localStorage.setItem(GUI_SCALE_STORAGE_KEY, String(guiScale)); }, [guiScale]);
-  useEffect(() => { window.localStorage.setItem(BUTTON_STYLE_STORAGE_KEY, String(compactButtons)); }, [compactButtons]);
-  useEffect(() => { window.localStorage.setItem(STEP_STYLE_STORAGE_KEY, String(compactSteps)); }, [compactSteps]);
+  useEffect(() => { window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, fontSize); }, [fontSize]);
   useEffect(() => { window.localStorage.setItem(HELPERS_STORAGE_KEY, String(showHelpers)); }, [showHelpers]);
   useEffect(() => { window.localStorage.setItem(LIBRARY_TAB_STORAGE_KEY, libraryTab); }, [libraryTab]);
   useEffect(() => { window.localStorage.setItem(TOOL_TAB_STORAGE_KEY, toolTab); }, [toolTab]);
@@ -242,7 +231,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function addTrack() {
     setTracks((oldTracks) => {
       const nextId = Math.max(0, ...oldTracks.map((track) => track.id)) + 1;
-      const nextTrack = { id: nextId, name: `Track ${nextId}`, assignedSample: undefined, steps: makeSteps(tracksRef.current[0]?.steps.length ?? 16), settings: { ...defaultTrackSettings }, mode: "oneshot" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false };
+      const nextTrack = { id: nextId, name: `Track ${nextId}`, assignedSample: undefined, steps: makeSteps(tracksRef.current[0]?.steps.length ?? 16), settings: { ...defaultTrackSettings }, mode: "oneshot" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false, color: getTrackColor(nextId) };
       setSelectedTrackId(nextId);
       setSelectedStepIndex(undefined);
       return [...oldTracks, nextTrack];
@@ -485,7 +474,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
 
   async function previewSlice(slice: Slice) { if (!selectedSample) { setStatus("Select a sample first."); return; } await playExclusive(async () => { animateRegionPlayhead(slice.startMs, slice.endMs, "slicer", selectedSample.id); const result = await playSampleRegionExclusive(selectedSample, slice.startMs, slice.endMs, { fadeInMs: slice.attackMs ?? slice.fadeInMs, fadeOutMs: slice.fadeOutMs }); setStatus(result.ok ? "Playing slice." : result.message); }); }
   async function playSelection(region: { startMs: number; endMs: number }) { if (!selectedSample) { setStatus("Select a sample first."); return; } await playExclusive(async () => { animateRegionPlayhead(region.startMs, region.endMs, "slicer", selectedSample.id); const result = await playSampleRegionExclusive(selectedSample, region.startMs, region.endMs); setStatus(result.ok ? "Playing selection." : result.message); }); }
-  function createSlicedTrack(sample: Sample, slices: Slice[]) { if (!slices.length) { setStatus("Create slices first."); return; } setTracks((old) => { const nextId = Math.max(0, ...old.map((track) => track.id)) + 1; const stepCount = old[0]?.steps.length ?? 16; const next = { id: nextId, name: sample.name, assignedSample: sample, steps: makeSteps(stepCount), slices: slices.map((slice) => ({ ...slice })), sliceSteps: Object.fromEntries(slices.map((slice) => [slice.id, makeSteps(stepCount)])), settings: { ...defaultTrackSettings }, mode: "sliced" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false }; setSelectedTrackId(nextId); return [...old, next]; }); setStatus(`Created sliced track from ${sample.name}.`); }
+  function createSlicedTrack(sample: Sample, slices: Slice[]) { if (!slices.length) { setStatus("Create slices first."); return; } setTracks((old) => { const nextId = Math.max(0, ...old.map((track) => track.id)) + 1; const stepCount = old[0]?.steps.length ?? 16; const next = { id: nextId, name: sample.name, assignedSample: sample, steps: makeSteps(stepCount), slices: slices.map((slice) => ({ ...slice })), sliceSteps: Object.fromEntries(slices.map((slice) => [slice.id, makeSteps(stepCount)])), settings: { ...defaultTrackSettings }, mode: "sliced" as const, rootNote: "C3", octaveRange: 1, effects: [], loopMode: "oneshot" as const, loopLengthSteps: 16, retriggerLoop: false, color: getTrackColor(nextId) }; setSelectedTrackId(nextId); return [...old, next]; }); setStatus(`Created sliced track from ${sample.name}.`); }
 
   async function exportCurrentPatternWav() {
     try {
@@ -509,31 +498,29 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
           const sampleById = new Map(samples.map((sample) => [sample.id, sample]));
           setTracks(importedTracks.map((track: SequencerTrack) => {
             const assigned = track.assignedSample as Sample | undefined;
-            if (!assigned?.isRendered) return track;
+            if (!assigned?.isRendered) return { ...track, color: track.color ?? getTrackColor(track.id) };
             const localSample = sampleById.get(assigned.id);
-            return localSample ? { ...track, assignedSample: localSample } : { ...track, assignedSample: undefined };
+            return localSample ? { ...track, color: track.color ?? getTrackColor(track.id), assignedSample: localSample } : { ...track, color: track.color ?? getTrackColor(track.id), assignedSample: undefined };
           }));
         }
         setActivePattern(project.activePattern ?? "A"); setStatus(missing.length ? `Project imported. Rendered sample ${missing.join(", ")} is not available in this browser.` : "Project imported. Rendered sample audio is reconnected when it exists in this browser IndexedDB."); } catch { setStatus("Could not import project JSON."); } })(); };
     reader.readAsText(file);
   }
 
-  function setPanelState(panelId: PanelId, panelState: WindowPanelState) {
-    setPanels((oldPanels) => ({ ...oldPanels, [panelId]: panelState }));
-  }
-
-  const themeStyle = { ...selectedSkin.variables, "--ui-scale": `${guiScale}%` } as CSSProperties;
-  const appClasses = [`app-shell`, `layout-${layoutMode}`, compactButtons ? "buttons-compact" : "", compactSteps ? "steps-compact" : "steps-normal", showHelpers ? "" : "helpers-hidden"].filter(Boolean).join(" ");
+  const themeStyle = { ...selectedSkin.variables } as CSSProperties;
+  const appClasses = [`app-shell`, `layout-${layoutMode}`, `font-${fontSize}`, "steps-compact", showHelpers ? "" : "helpers-hidden"].filter(Boolean).join(" ");
 
   return (
     <main className={appClasses} style={themeStyle}>
-      <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} guiScale={guiScale} layoutMode={layoutMode} compactButtons={compactButtons} compactSteps={compactSteps} showHelpers={showHelpers} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onGuiScaleChange={setGuiScale} onLayoutModeChange={setLayoutMode} onCompactButtonsChange={setCompactButtons} onCompactStepsChange={setCompactSteps} onShowHelpersChange={setShowHelpers} onResetLayout={() => { setLayoutMode("balanced"); setGuiScale(100); setCompactButtons(false); setCompactSteps(true); setShowHelpers(true); setLibraryTab("library"); setToolTab("trackControls"); }} />
+      <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} fontSize={fontSize} layoutMode={layoutMode} showHelpers={showHelpers} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onFontSizeChange={setFontSize} onLayoutModeChange={setLayoutMode} onShowHelpersChange={setShowHelpers} onResetLayout={() => { setLayoutMode("balanced"); setFontSize("normal"); setShowHelpers(true); setLibraryTab("library"); setToolTab("trackControls"); }} />
       <div className="workspace-grid">
         <div className="library-column"><TabbedPanel<LibraryTab> title="Library / Export" activeTab={libraryTab} onTabChange={setLibraryTab} tabs={[{ id: "library", label: "Sample Library", content: <SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => setSelectedSampleId(sample.id)} onPlay={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /> }, { id: "export", label: "Export", content: <ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /> }]} /></div>
         <div className="tools-column"><TabbedPanel<ToolTab> title="Tools" activeTab={toolTab} onTabChange={setToolTab} tabs={[{ id: "trackControls", label: "Track Controls", content: <TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPlay={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={(playheadMs?.source === "track-controls" || (playheadMs?.source === "sequencer" && playheadMs.trackId === selectedTrack?.id)) ? playheadMs.valueMs : undefined} /> }, { id: "slicer", label: "Waveform / Slicer", content: <WaveformSlicer selectedSample={selectedSample} onEnsureDuration={ensureDuration} onPlaySample={previewSample} onPlaySlice={previewSlice} onPlaySelection={playSelection} onStopPreview={() => stopSequencer()} onCreateSlicedTrack={createSlicedTrack} onStatus={setStatus} playheadMs={playheadMs?.source === "slicer" && playheadMs.sampleId === selectedSample?.id ? playheadMs.valueMs : undefined} /> }, { id: "guitar", label: "Guitar Tools", content: <GuitarTools samples={samples} bpm={bpm} onPlayExclusive={playExclusive} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /> }]} /></div>
-        <div className="arrangement-column"><WindowPanel title="Arrangement"><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel></div>
       </div>
+      <div className="sequencer-workspace">
+        <WindowPanel title="Arrangement" className="arrangement-strip"><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel>
       <WindowPanel title="Step Sequencer" className="sequencer-window bottom-sequencer"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onToggleSliceStep={toggleSliceStep} onToggleMute={toggleMute} onToggleSolo={toggleSolo} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} onTrackSettingsChange={updateTrackSettings} /></WindowPanel>
+      </div>
     </main>
   );
 }
