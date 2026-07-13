@@ -104,6 +104,7 @@ export type SequencerTrack = {
   loopMode: LoopMode;
   loopLengthSteps: number;
   retriggerLoop: boolean;
+  color?: string;
 };
 
 export type PatternId = string;
