@@ -270,3 +270,45 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .slice-boundary-handle.end { border-left-style: dashed; }
 .selection-info { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; padding: .5rem; border: 1px dashed var(--color-accent); border-radius: .5rem; background: rgba(56,189,248,.08); }
 .slice-name-input { min-width: 6rem; width: 7rem; }
+
+.app-shell { font-size: calc(var(--ui-scale, 100%) * 0.01rem); }
+.toolbar, .workspace-grid, .bottom-sequencer { font-size: 1rem; }
+.gui-scale-control { display:inline-flex; align-items:center; gap:.25rem; border:1px solid var(--color-border); padding:.2rem; border-radius:var(--control-radius, 6px); }
+.gui-scale-control button { padding:.2rem .4rem; }
+.buttons-compact button, .buttons-compact .import-button { padding:.25rem .45rem; font-size:.78em; }
+.helpers-hidden .helper-text { display:none !important; }
+.workspace-grid { grid-template-columns:minmax(260px, .85fr) minmax(420px, 1.45fr) minmax(300px, 1fr); margin-bottom:1rem; }
+.app-shell.layout-compact .workspace-grid { grid-template-columns:minmax(220px, .7fr) minmax(380px, 1.6fr) minmax(260px, .85fr); gap:.65rem; }
+.app-shell.layout-spacious .workspace-grid { grid-template-columns:minmax(320px, 1fr) minmax(520px, 1.7fr) minmax(360px, 1fr); gap:1.25rem; }
+.library-column, .tools-column, .arrangement-column { min-width:0; }
+.tab-list { display:flex; gap:.35rem; padding:.45rem .55rem 0; border-bottom:1px solid var(--color-border); background:color-mix(in srgb, var(--color-panel), black 8%); overflow-x:auto; }
+.tab-list button { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.tab-list .active-tab { color:var(--color-accent); border-color:var(--color-accent); background:color-mix(in srgb, var(--color-accent), transparent 88%); }
+.tabbed-panel .window-content { min-height:20rem; }
+.bottom-sequencer { width:100%; }
+.bottom-sequencer .window-content { overflow-x:auto; }
+.sample-view-toggle, .sample-compact-line { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+.sample-main { min-width:0; }
+.sample-compact-line strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.expand-sample { min-width:1.6rem; padding:.1rem .25rem; }
+.mode-badge, .status-dot { display:inline-flex; align-items:center; border:1px solid var(--color-border); border-radius:999px; padding:.08rem .35rem; font-size:.68rem; color:var(--color-accent); text-transform:uppercase; }
+.status-dot { color:var(--color-text); opacity:.75; }
+.sample-details { margin-top:.3rem; }
+.quick-volume { display:grid; grid-template-columns:auto 1fr auto; gap:.25rem; align-items:center; font-size:.68rem; margin-top:.25rem; }
+.quick-volume input { width:100%; min-width:5rem; padding:0; }
+.quick-volume em { font-style:normal; color:var(--color-accent); }
+.steps-normal .track-row { padding:.35rem; }
+.steps-normal .step { min-height:1.6rem; }
+.steps-compact .step-numbers, .steps-compact .track-row { grid-template-columns:7rem 1fr; gap:.35rem; }
+.steps-compact .step-numbers { padding-left:7.35rem; font-size:.62rem; margin-bottom:.2rem; }
+.steps-compact .track-row { padding:.22rem; }
+.steps-compact .track-label small { font-size:.64rem; }
+.steps-compact .steps { gap:.14rem; }
+.steps-compact .step { min-width:1rem; min-height:1.05rem; aspect-ratio:1.15; border-radius:3px; border-width:1px; }
+.steps-compact .step span { font-size:.48rem; }
+.steps-compact .slice-step-row { grid-template-columns:minmax(78px, 110px) 1fr; gap:.3rem; }
+.primary-track-actions button { font-weight:700; }
+.advanced-actions { margin:.35rem 0; border:1px dashed var(--color-border); padding:.4rem; }
+.advanced-actions summary { cursor:pointer; color:var(--color-accent); }
+@media (max-width: 1150px) { .workspace-grid, .app-shell.layout-compact .workspace-grid, .app-shell.layout-spacious .workspace-grid { grid-template-columns:1fr; } }
+@media (max-width: 700px) { .toolbar { align-items:stretch; } .status { width:100%; border-left:0; padding-left:0; } .step-numbers, .track-row, .steps-compact .step-numbers, .steps-compact .track-row { grid-template-columns:6rem 1fr; } .step-numbers, .steps-compact .step-numbers { padding-left:6.35rem; } }
