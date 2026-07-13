@@ -1,6 +1,6 @@
-# Dusty Workstation
+# Workstation Music
 
-Dusty Workstation is a beginner-friendly browser music workstation MVP inspired by early-2000s web tools, Winamp/QMMP skins, trackers, samplers, and simple guitar helpers.
+Workstation Music is a beginner-friendly browser music workstation MVP inspired by early-2000s web tools, Winamp/QMMP skins, trackers, samplers, and simple guitar helpers.
 
 ## How to run
 
@@ -39,18 +39,33 @@ Put one-shot samples in `public/samples/oneshots/` and loop samples in `public/s
 
 Supported extensions are `.wav`, `.mp3`, `.ogg`, and `.flac`. Categories are guessed from lowercase filenames such as `kick`, `snare`, `hat`, `clap`, `perc`, `bass`, `guitar`, `melody`, or `loop`; anything else is `other`.
 
-## Layout and window panels
+## Layout, tabs, and UI density
 
-The simplified workflow is:
+Workstation Music now uses a denser, DAW-style layout:
 
-- **Left column:** Sample Library, Guitar Tools, Export.
-- **Main area:** Step Sequencer, Track Controls, Arrangement.
+- **Top toolbar:** app title, global Play/Stop, BPM, skin selector, layout mode, compact button/step toggles, helper text toggle, GUI scale controls, and Reset Layout.
+- **Library / Export tabs:** Sample Library and Export share the left tool area.
+- **Tools tabs:** Track Controls, Waveform / Slicer, and Guitar Tools share the central tool area.
+- **Arrangement:** remains visible as its own standalone panel.
+- **Step Sequencer:** spans the full width at the bottom and can scroll horizontally for longer patterns.
 
-Panels keep the retro window controls: minimize, maximize/restore, and no close button. **Reset Layout** restores every current panel to normal size. Drag-and-drop windows are intentionally not implemented.
+Window minimize/maximize controls were removed from panel title bars. Collapsible sections inside panels, such as Region and Loop Controls, remain available.
+
+### Persisted UI preferences
+
+The browser remembers these settings in `localStorage`: selected skin, GUI scale, layout mode, compact button mode, compact step mode, helper text visibility, and the selected Library/Export and Tools tabs.
+
+### GUI scale and density
+
+The toolbar GUI scale supports **75%, 85%, 90%, 100%, 110%, 125%, and 150%**. Layout modes are **Compact**, **Balanced**, and **Spacious**. Compact Buttons and Compact Steps reduce control padding and step row height for dense sessions.
+
+### Helper text toggle
+
+Long instructional copy is wrapped as helper text and can be hidden globally with **Hide Helpers**. Warnings, errors, labels, and critical statuses stay visible.
 
 ## Track Controls
 
-Track Controls is the main sound-editing area for the selected track. It includes sample editing and track rendering tools:
+Track Controls is the main sound-editing tab for the selected track. It includes sample editing and track rendering tools:
 
 - Assigned sample name, filename, category, and type.
 - Track mode, root note, and octave range for keyboard/chord mode.
@@ -59,7 +74,7 @@ Track Controls is the main sound-editing area for the selected track. It include
 - Region-based sample selection with **Region Start**, **Region End**, and **Region Length** readouts, plus fade, pitch, volume, mute, and solo controls.
 - Fade curve selectors.
 - FX Rack.
-- Play and render buttons.
+- Simplified primary actions: **Play**, **Render to New Sample**, and **Reset**. Advanced destructive/cleanup actions live in an expandable Advanced section.
 
 The collapsible region controls are useful for cutting one hit from a long loop: set **Region Start** near the hit, set **Region End** just after it, and use **Region Length** to confirm the selected duration in milliseconds and seconds. The old trim model remains compatible internally: `startOffsetMs` maps to Region Start and `endTrimMs` maps to `sampleDurationMs - Region End`.
 
@@ -75,7 +90,7 @@ Browser limitation: rendered files download to your computer. They do **not** au
 
 ## Step Sequencer
 
-The Step Sequencer edits the active pattern. It supports dynamic tracks, step playback, keyboard mode, and chord mode.
+The full-width bottom Step Sequencer edits the active pattern and exposes quick per-track volume and pitch controls in each track header. It supports dynamic tracks, step playback, keyboard mode, and chord mode.
 
 Step count can be changed per active pattern using allowed values **4, 8, 16, 24, and 32**. Increasing the step count adds inactive steps. Decreasing the step count truncates extra steps while preserving earlier hits. Sequencer playback uses the current active pattern's step count.
 
@@ -251,3 +266,9 @@ All Play buttons are exclusive: starting Sample Library, Track Controls, Wavefor
 - Transient detection / auto-chop is not implemented yet.
 - Some export paths are dry if FX offline rendering is unavailable.
 - Browser-only apps cannot save imported files into `public/samples` or delete physical disk samples without a backend.
+
+## Compact Sample Library and Export tab
+
+Sample Library is compact by default. Rows show the sample name, type/category badges, Play, Assign, and local Remove only when the sample is imported/rendered/local. Expand a row or switch to Detailed mode to see filename, duration, status, path, conversion helper text, and debug info. Disk samples still cannot be destructively removed from the browser.
+
+Export moved next to Sample Library in the **Library / Export** tabs. Export Current Pattern Mix WAV, Project JSON export, and Project JSON import remain active. Arrangement WAV and Stems ZIP stay disabled with clear Coming Soon labels until implemented.
