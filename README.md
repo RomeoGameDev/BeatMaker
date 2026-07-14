@@ -35,9 +35,9 @@ public/samples/oneshots/
 public/samples/loops/
 ```
 
-Put one-shot samples in `public/samples/oneshots/` and loop samples in `public/samples/loops/`. They are served in the browser as `/samples/oneshots/...` and `/samples/loops/...`, so WAV filenames such as `kick01.wav` and `kick02.wav` work from the one-shot folder.
+Put one-shot samples in `public/samples/oneshots/` and loop samples in `public/samples/loops/`. They are served in the browser as `/samples/oneshots/...` and `/samples/loops/...`, so WAV filenames such as `kick01.wav` and `kick02.wav` work from the one-shot folder. New samples start in an idle state; selecting, assigning, previewing, or starting playback preloads and decodes them into an in-memory cache so subsequent playback starts immediately. The first play after adding a file may show **Loading sample...** while the browser fetches and decodes audio, but the result is cached and reused until the page is refreshed.
 
-Supported extensions are `.wav`, `.mp3`, `.ogg`, and `.flac`. Categories are guessed from lowercase filenames such as `kick`, `snare`, `hat`, `clap`, `perc`, `bass`, `guitar`, `melody`, or `loop`; anything else is `other`.
+Supported extensions are `.wav`, `.mp3`, `.ogg`, and `.flac` when the current browser can decode that exact file/codec through Web Audio. PCM WAV is the safest format. Categories are guessed from lowercase filenames such as `kick`, `snare`, `hat`, `clap`, `perc`, `bass`, `guitar`, `melody`, or `loop`; anything else is `other`.
 
 ## Layout, tabs, and UI density
 
@@ -109,15 +109,16 @@ Arrangement is visually grouped with the Step Sequencer as a compact strip direc
 
 ## Export
 
-The Export panel provides:
+The Export panel provides status-driven exports:
 
+- **Export Current Pattern WAV**: implemented as a dry mono mix. It preloads all active-pattern samples, respects one-shot/keyboard/sliced tracks, imported/rendered samples, track volume, pitch, selected regions, fades, and mute/solo, then downloads `workstation-current-pattern.wav`.
+- **Export Arrangement WAV**: implemented as a basic dry mono arrangement render. Timeline slots render sequentially, empty slots render silence, each slot uses the active pattern step duration at the current BPM, and the download is `workstation-arrangement.wav`.
+- **Export Selected Track WAV**: implemented from the selected track's assigned sample and current region/fade/pitch/volume settings. The downloaded filename starts with the rendered track/sample name.
+- **Export Stems ZIP**: disabled with an honest coming-soon label in this pass because the `jszip` dependency was not available in the current package registry environment.
 - **Export Project JSON**: implemented. Downloads tracks, patterns, arrangement, BPM, selected theme, and settings. It does not embed audio files.
 - **Import Project JSON**: implemented. Restores the project data and expects referenced samples to exist locally.
-- **Export Current Pattern Mix WAV**: coming soon.
-- **Export Arrangement Mix WAV**: coming soon.
-- **Export Stems ZIP**: coming soon.
 
-Project JSON only references samples by their local paths, so the same sample files must exist under `public/samples` when reopening/importing a project.
+Export limitations: FX are rendered dry for now, decode-failed or missing samples are skipped with a toolbar warning, and large files/projects may take time to preload and render. Project JSON only references samples by their local paths, so the same sample files must exist under `public/samples` when reopening/importing a project.
 
 ## FX Rack and playback modes
 
@@ -128,9 +129,11 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 ## Known limitations
 
 - FX waveform rendering and WAV export with FX are coming soon.
-- Current pattern mix WAV, arrangement mix WAV, and stems ZIP are coming soon.
-- Track WAV rendering is mono dry render with selected-region/fade/pitch/volume.
-- Playhead sync is approximate and not sample-accurate.
+- Stems ZIP is coming soon until JSZip is available.
+- Pattern, arrangement, and track WAV rendering are mono dry renders with selected-region/fade/pitch/volume; FX export is not included yet.
+- Decode-failed samples are skipped from render/export and should be converted to browser-decodable PCM WAV.
+- Large sample files may take noticeable time to fetch/decode/render; status messages indicate preload/export progress.
+- Playhead sync is approximate and scoped to the active preview/track context.
 - There is no backend save to `public/samples`.
 - Cloud accounts, Winamp `.wsz` import, drag-and-drop windows, advanced DAW timelines, and full spectral analysis are intentionally not implemented.
 
@@ -144,7 +147,7 @@ One-shot mode triggers samples like drum pads. Keyboard mode treats the assigned
 6. In Track Controls, switch waveform Original / Processed / Overlay, move Start/Fade/Volume, confirm visualization changes, and click Play Track.
 7. In Step Sequencer, set steps to 8, add hits, set steps to 16 and confirm old hits remain, then set max 32 and test playback.
 8. In Arrangement, create Pattern B, edit Pattern A and B differently, copy/paste a pattern, fill timeline slots, and try Play Arrangement.
-9. In Export, export project JSON, import project JSON, and try the current pattern WAV button to see the friendly coming-soon status.
+9. In Export, export Current Pattern WAV, Arrangement WAV, Selected Track WAV, and Project JSON; confirm Stems ZIP is visibly disabled as coming soon.
 10. Confirm Guitar Tools is in the left column before Export, minimize/maximize panels, and use Reset Layout.
 
 ## Guitar Tools

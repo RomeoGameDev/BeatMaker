@@ -63,7 +63,9 @@ function discoverSamples(directory = SAMPLE_ROOT, discoveredSamples: Sample[] = 
       name,
       type: guessType(relativeDirectory),
       category: guessCategory(entry),
-      path: normalizeSamplePath(`/samples/${relativePath.join("/")}`)
+      path: normalizeSamplePath(`/samples/${relativePath.join("/")}`),
+      normalizedPath: normalizeSamplePath(`/samples/${relativePath.join("/")}`),
+      loadStatus: "idle"
     });
   });
 

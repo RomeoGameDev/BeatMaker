@@ -41,7 +41,9 @@ export type Sample = {
   originalPath?: string;
   normalizedPath?: string;
   loadStatus?: import("@/lib/sampleLoader").SampleLoadStatus;
+  lastError?: string;
   lastErrorMessage?: string;
+  isPreloading?: boolean;
 };
 
 export type Skin = {
