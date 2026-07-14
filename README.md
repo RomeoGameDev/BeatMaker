@@ -51,6 +51,22 @@ Workstation Music now uses a denser, DAW-style layout:
 
 Window minimize/maximize controls were removed from panel title bars. Collapsible sections inside panels, such as Region and Loop Controls, remain available.
 
+
+### Optional toolbar link
+
+The top toolbar can show one custom button/link next to the **Workstation Music** title. Configure it in `src/config/appLinks.ts`:
+
+```ts
+export const customToolbarLink = {
+  enabled: false,
+  title: "",
+  url: "",
+  external: true
+};
+```
+
+Leave `enabled` as `false`, or leave `title` or `url` empty, to hide the link. To show it, set `enabled: true`, provide a non-empty `title` and `url`, and restart the dev server if your local Next.js process does not pick up the config change automatically. When `external` is `true`, the link opens in a new tab with `target="_blank"` and `rel="noreferrer"`; when `external` is `false`, it uses normal link navigation.
+
 ### Persisted UI preferences
 
 The browser remembers these settings in `localStorage`: selected skin, font size, layout mode, helper text visibility, and the selected Library/Export and Tools tabs.

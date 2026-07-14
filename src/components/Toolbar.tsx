@@ -1,5 +1,6 @@
 import type { Skin } from "@/types";
 import SkinSelector from "./SkinSelector";
+import { customToolbarLink } from "@/config/appLinks";
 
 type LayoutMode = "compact" | "balanced" | "spacious";
 export type FontSizeMode = "small" | "normal" | "large";
@@ -7,9 +8,11 @@ export type FontSizeMode = "small" | "normal" | "large";
 type Props = { bpm: number; isPlaying: boolean; status: string; skins: Skin[]; selectedSkinId: string; fontSize: FontSizeMode; layoutMode: LayoutMode; showHelpers: boolean; onPlay: () => void; onStop: () => void; onBpmChange: (bpm: number) => void; onSkinChange: (skinId: string) => void; onFontSizeChange: (size: FontSizeMode) => void; onLayoutModeChange: (mode: LayoutMode) => void; onShowHelpersChange: (value: boolean) => void; onResetLayout: () => void };
 
 export default function Toolbar({ bpm, isPlaying, status, skins, selectedSkinId, fontSize, layoutMode, showHelpers, onPlay, onStop, onBpmChange, onSkinChange, onFontSizeChange, onLayoutModeChange, onShowHelpersChange, onResetLayout }: Props) {
+  const shouldShowCustomLink = customToolbarLink.enabled && customToolbarLink.title.trim() && customToolbarLink.url.trim();
+
   return (
     <header className="toolbar">
-      <h1>Workstation Music</h1>
+      <div className="toolbar-title-group"><h1>Workstation Music</h1>{shouldShowCustomLink && <a className="toolbar-link-button" href={customToolbarLink.url} target={customToolbarLink.external ? "_blank" : undefined} rel={customToolbarLink.external ? "noreferrer" : undefined}>{customToolbarLink.title}</a>}</div>
       <button onClick={onPlay} disabled={isPlaying}>Play</button><button onClick={onStop}>Stop</button>
       <label className="field-label">BPM<input type="number" min="60" max="220" value={bpm} onChange={(event) => onBpmChange(Number(event.target.value))} /></label>
       <SkinSelector skins={skins} selectedSkinId={selectedSkinId} onChange={onSkinChange} />
