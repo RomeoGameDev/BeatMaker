@@ -387,3 +387,16 @@ small { display: block; opacity: .75; font-size: .72rem; margin-top: .2rem; }
 .perf-debug { margin: -.35rem 0 .65rem; padding: .35rem .55rem; border: 1px dashed var(--color-border); border-radius: .5rem; color: var(--color-muted); font-size: .75rem; }
 .sequencer-workspace .bottom-sequencer { width: 100%; }
 .sequencer-workspace .tabbed-panel .window-content { min-height: 0; }
+/* Focused precision/polish pass */
+.dragging-slice-region { opacity: .42; background: color-mix(in srgb, var(--track-color, var(--color-accent)), transparent 82%); pointer-events: none; }
+.drag-guide { position: absolute; z-index: 5; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,.9); box-shadow: 0 0 10px rgba(255,255,255,.75); pointer-events: none; }
+.drag-guide span { position: absolute; top: .35rem; transform: translateX(.35rem); white-space: nowrap; font-size: .62rem; color: #050507; background: rgba(255,255,255,.88); border: 1px solid rgba(0,0,0,.25); border-radius: 3px; padding: .08rem .22rem; }
+.slice-boundary-handle.dragging-handle { opacity: .55; background: rgba(255,255,255,.38); }
+.track-right-controls { justify-items: center; align-content: center; }
+.track-right-controls .quick-volume { grid-template-columns: 1fr; gap: .04rem; justify-items: center; width: 100%; font-size: .56rem; text-transform: uppercase; }
+.track-right-controls .quick-volume input[type="range"] { width: 4.8rem; min-width: 4.8rem; height: 1.05rem; accent-color: var(--track-color, var(--color-accent)); }
+.track-right-controls .quick-volume em { font-size: .56rem; text-transform: none; white-space: nowrap; }
+.track-header-buttons { justify-content: center; }
+@media (max-width: 760px) { .track-right-controls .quick-volume { grid-template-columns: auto 1fr auto; } .track-right-controls .quick-volume input[type="range"] { width: 100%; min-width: 5rem; } }
+.track-right-controls .quick-volume input[type="range"] { writing-mode: vertical-lr; direction: rtl; width: 1.05rem; min-width: 1.05rem; height: 2.8rem; }
+@media (max-width: 760px) { .track-right-controls .quick-volume input[type="range"] { writing-mode: horizontal-tb; direction: ltr; height: 1.05rem; width: 100%; min-width: 5rem; } }

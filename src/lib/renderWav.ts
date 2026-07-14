@@ -73,8 +73,8 @@ export async function renderTrackDryWav(track: SequencerTrack, durationSeconds?:
 export type PatternSteps = Record<PatternId, Record<number, SequencerStep[]>>;
 export type RenderResult = { blob: Blob; skipped: string[] };
 
-export async function renderPatternDryWav(tracks: SequencerTrack[], bpm: number, outputSeconds?: number): Promise<RenderResult> {
-  const stepCount = Math.max(1, ...tracks.map((track) => track.steps.length || 0));
+export async function renderPatternDryWav(tracks: SequencerTrack[], bpm: number, outputSeconds?: number, explicitStepCount?: number): Promise<RenderResult> {
+  const stepCount = Math.max(1, explicitStepCount ?? Math.max(1, ...tracks.map((track) => track.steps.length || 0)));
   const sampleRate = 44100;
   const stepSeconds = 60 / Math.max(1, bpm) / 4;
   const output = new Float32Array(Math.ceil((outputSeconds ?? (stepCount * stepSeconds + 8)) * sampleRate));
@@ -85,7 +85,9 @@ export async function renderPatternDryWav(tracks: SequencerTrack[], bpm: number,
     let buffer: AudioBuffer | undefined;
     try { buffer = await getBuffer(track); } catch { skipped.push(track.assignedSample.name); continue; }
     if (!buffer) continue;
-    const events = track.mode === "sliced" ? (track.slices ?? []).flatMap((slice) => (track.sliceSteps?.[slice.id] ?? []).map((step, stepIndex) => ({ step, stepIndex, slice })).filter((item) => item.step?.active)) : track.steps.map((step, stepIndex) => ({ step, stepIndex, slice: undefined })).filter((item) => item.step?.active);
+    const events = track.mode === "sliced"
+      ? (track.slices ?? []).flatMap((slice) => (track.sliceSteps?.[slice.id] ?? []).slice(0, stepCount).map((step, stepIndex) => ({ step, stepIndex, slice })).filter((item) => item.step?.active))
+      : track.steps.slice(0, stepCount).map((step, stepIndex) => ({ step, stepIndex, slice: undefined })).filter((item) => item.step?.active);
     for (const event of events) mixBufferInto(output, buffer, track, stepSeconds, event);
   }
   let last = output.length - 1;
@@ -94,22 +96,27 @@ export async function renderPatternDryWav(tracks: SequencerTrack[], bpm: number,
 }
 
 export async function renderArrangementDryWav(tracks: SequencerTrack[], bpm: number, timeline: ArrangementSlot[], patterns: PatternSteps): Promise<RenderResult> {
-  const stepCount = Math.max(1, tracks[0]?.steps.length ?? 16);
-  const patternSeconds = stepCount * (60 / Math.max(1, bpm) / 4);
+  const stepSeconds = 60 / Math.max(1, bpm) / 4;
+  const slotStepCounts = timeline.map((pattern) => pattern ? Math.max(1, patterns[pattern]?.[tracks[0]?.id]?.length ?? tracks[0]?.steps.length ?? 16) : Math.max(1, tracks[0]?.steps.length ?? 16));
+  const totalSeconds = slotStepCounts.reduce((sum, count) => sum + count * stepSeconds, 0);
   const sampleRate = 44100;
-  const output = new Float32Array(Math.ceil(Math.max(1, timeline.length * patternSeconds) * sampleRate));
+  const output = new Float32Array(Math.ceil(Math.max(1, totalSeconds) * sampleRate));
   const skipped: string[] = [];
+  let offsetSeconds = 0;
   for (let slotIndex = 0; slotIndex < timeline.length; slotIndex += 1) {
     const pattern = timeline[slotIndex];
-    if (!pattern) continue;
-    const patternTracks = tracks.map((track) => ({ ...track, steps: patterns[pattern]?.[track.id] ?? track.steps }));
-    const result = await renderPatternDryWav(patternTracks, bpm, patternSeconds);
+    const stepCount = slotStepCounts[slotIndex] ?? 16;
+    const patternSeconds = stepCount * stepSeconds;
+    if (!pattern) { offsetSeconds += patternSeconds; continue; }
+    const patternTracks = tracks.map((track) => ({ ...track, steps: (patterns[pattern]?.[track.id] ?? track.steps).slice(0, stepCount) }));
+    const result = await renderPatternDryWav(patternTracks, bpm, patternSeconds, stepCount);
     skipped.push(...result.skipped);
     const buf = await result.blob.arrayBuffer();
     const audio = await new OfflineAudioContext(1, 1, sampleRate).decodeAudioData(buf);
     const data = audio.getChannelData(0);
-    const offset = Math.floor(slotIndex * patternSeconds * sampleRate);
+    const offset = Math.floor(offsetSeconds * sampleRate);
     for (let i = 0; i < data.length && offset + i < output.length; i += 1) output[offset + i] = clamp((output[offset + i] ?? 0) + data[i], -1, 1);
+    offsetSeconds += patternSeconds;
   }
   return { blob: encodeWav(output, sampleRate), skipped };
 }

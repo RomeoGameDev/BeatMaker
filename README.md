@@ -302,3 +302,39 @@ Layout changes:
 - **Library / Export** and **Tools** panels have compact ▾ / ▸ collapse buttons in their title bars, and their collapsed state is saved in localStorage.
 
 Known limitation: live sequencer playback may be dry when track FX are enabled. This is intentional for the performance pass so timing stays tight while per-track reusable live FX chains are optimized later.
+
+## 2026 focused bugfix and polish pass
+
+This pass keeps the existing feature set focused and improves slicer precision, sequencer correctness, export behavior, and Guitar Tools messaging.
+
+### Waveform / Slicer precision
+- Waveforms now render from higher-resolution min/max peaks and draw a peak column per visible canvas pixel instead of coarse simplified bars.
+- Peak drawing uses a gentle transient boost so kick/snare attacks and short peaks are easier to see in longer loops.
+- Slice boundary dragging now shows a vertical cursor guide with seconds and milliseconds, and the dragged slice region/handle becomes semi-transparent so the waveform remains visible underneath.
+- Slice handles are clamped to valid start/end ranges to prevent inverted or zero-length slice regions.
+
+### Step Sequencer controls and step count
+- The Step Sequencer right-side track controls use a compact vertical stack: Vol label/value, Pitch label/value, then M / S / X buttons.
+- Volume uses `0` to `1.5` with `0.01` steps and displays as a percentage.
+- Pitch uses `-24` to `+24` semitones with `1` semitone steps and displays with an `st` suffix.
+- Reducing pattern step count now truncates normal steps, keyboard/chord note data, and sliced-track `sliceSteps`. Increasing step count adds inactive empty steps.
+- Playback, current-step wrapping, current-pattern WAV export, and arrangement WAV export use the current pattern step count. Safety expectation: if the step count is 8, no step index 8 or higher should play or export.
+
+### Export status
+- **Export Current Pattern WAV** remains functional and respects current step count, mute/solo, sliced tracks, imported/rendered samples where decodable, track volume, pitch, and slice/region playback.
+- **Export Arrangement WAV** is functional as a dry mono render and now advances arrangement slots using each pattern's current step count.
+- **Export Stems ZIP** is functional. It exports one WAV per unmuted/eligible parent track in the current pattern, uses solo filtering when any track is soloed, exports sliced tracks as one parent stem, and downloads `workstation-stems.zip`.
+- The app uses a small built-in stored-ZIP writer because the package registry blocked installing `jszip` in this environment. The resulting ZIP is uncompressed but standard and should open in normal archive tools.
+
+### Guitar Tools Send to Selected Step
+- The button remains visible because the feature is useful and now has clearer guardrails.
+- Sending notes requires a selected sequencer step and a selected Keyboard-mode track.
+- The Chord Helper send action writes the chosen chord to the selected step.
+- The Fretboard / Piano **Send to Selected Step** action requires explicitly selected notes; otherwise it shows “Select notes first.”
+- Non-keyboard tracks show “Switch selected track to Keyboard mode to send notes.” and no selected step shows “Select a step in the sequencer first.”
+
+### Known limitations after this pass
+- WAV exports are still dry mono renders; full offline FX rendering is planned later.
+- The built-in ZIP writer stores WAV files without compression, so stem ZIPs can be large.
+- Slice snapping, automatic transient detection, and linked neighbor editing are not implemented yet.
+- Browser-decode limitations still apply: missing or decode-failed samples are skipped with toolbar warnings.
