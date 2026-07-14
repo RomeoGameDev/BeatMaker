@@ -283,3 +283,19 @@ Export moved next to Sample Library in the **Library / Export** tabs. Export Cur
 - Sample Library rows are compact list items with small Play/Assign/Remove buttons, truncated names, expandable details/debug information, and a scrolling list container.
 - Export remains beside Sample Library but uses compact spacing and small action buttons.
 - Old panel maximize/minimize/close icons are not used; only purposeful collapsible section arrows/details remain.
+
+## Playback performance and layout cleanup
+
+The Step Sequencer live path now preloads project audio before starting Tone.Transport. Samples used by active tracks, including sliced-track source samples and browser-local rendered/imported samples, are decoded once and read from a shared sample cache during playback. Sequencer ticks skip unloaded or decode-failed samples with a friendly “Sample not loaded yet.” status instead of fetching or decoding inside the timing callback.
+
+Live sequencer triggering now prioritizes stable timing: one Transport scheduler is cleared before every new play, Stop cancels scheduling and active players, and ticks use Tone's scheduled time argument while avoiding sample fetch/decode work. Per-hit live FX are bypassed for now to avoid rebuilding expensive FX chains on every 16th-note; preview and dry export paths remain available, and live FX reuse can be optimized in a later pass.
+
+UI work during playback has also been reduced. The current step indicator remains lightweight, waveform playhead animation is not passed into hidden Tools tabs, and the performance debug readout is hidden behind the helper/debug toggle. The debug readout shows cached sample count, loading/failed samples, currently active players, scheduler state, and last preload time.
+
+Layout changes:
+
+- The bottom full-width workspace now has tabs for **Step Sequencer** and **Arrangement**.
+- Arrangement is no longer a separate panel above the sequencer; its existing controls live inside the Arrangement bottom tab.
+- **Library / Export** and **Tools** panels have compact ▾ / ▸ collapse buttons in their title bars, and their collapsed state is saved in localStorage.
+
+Known limitation: live sequencer playback may be dry when track FX are enabled. This is intentional for the performance pass so timing stays tight while per-track reusable live FX chains are optimized later.
