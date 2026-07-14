@@ -14,6 +14,7 @@ import TabbedPanel from "@/components/TabbedPanel";
 import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion, playSampleRegionExclusive, getActiveAudioStats } from "@/lib/audioEngine";
 import { getSampleCacheStats, loadSampleBuffer, preloadProjectAudio } from "@/lib/sampleCache";
 import { downloadBlob, renderArrangementDryWav, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
+import { createStoredZip } from "@/lib/zip";
 import { deleteRenderedSample, hasRenderedSample, loadRenderedSamples, saveRenderedSample } from "@/lib/renderedSampleStore";
 import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
@@ -402,7 +403,17 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function removePattern(pattern: PatternId) { if (availablePatterns.length <= 1 || pattern === availablePatterns[0]) return; setAvailablePatterns((old) => old.filter((item) => item !== pattern)); setTimeline((old) => old.map((slot) => slot === pattern ? "" : slot)); setPatterns((old) => { const next = { ...old }; delete next[pattern]; return next; }); if (activePatternRef.current === pattern) loadPattern(availablePatterns[0]); }
   function copyPattern() { setCopiedPattern(Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)]))); setStatus(`Copied Pattern ${activePatternRef.current}.`); }
   function pastePattern() { if (!copiedPattern) return; const snapshot = copiedPattern; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: snapshot[track.id] ? cloneSteps(snapshot[track.id]) : makeSteps(track.steps.length) }))); setStatus(`Pasted copied pattern into Pattern ${activePatternRef.current}.`); }
-  function changeStepCount(count: number) { if (![4,8,16,24,32].includes(count)) return; setTracks((oldTracks) => oldTracks.map((track) => ({ ...track, steps: Array.from({ length: count }, (_, index) => track.steps[index] ? { ...track.steps[index], notes: track.steps[index].notes ? [...track.steps[index].notes] : undefined } : { active: false }), sliceSteps: track.sliceSteps ? Object.fromEntries(Object.entries(track.sliceSteps).map(([id, steps]) => [id, Array.from({ length: count }, (_, index) => steps[index] ? { ...steps[index] } : { active: false })])) : undefined }))); }
+  function resizeSteps(steps: SequencerStep[] = [], count: number) { return Array.from({ length: count }, (_, index) => steps[index] ? { ...steps[index], notes: steps[index].notes ? [...steps[index].notes] : undefined } : { active: false }); }
+  function resizeTrackStepData(track: SequencerTrack, count: number): SequencerTrack {
+    return { ...track, steps: resizeSteps(track.steps, count), sliceSteps: track.sliceSteps ? Object.fromEntries(Object.entries(track.sliceSteps).map(([id, steps]) => [id, resizeSteps(steps, count)])) : undefined };
+  }
+  function changeStepCount(count: number) {
+    if (![4,8,16,24,32].includes(count)) return;
+    // Step-count safety test helper: if stepCount is 8, no step index >= 8 should be triggered, rendered, or exported.
+    setCurrentStep((step) => step % count);
+    setTracks((oldTracks) => oldTracks.map((track) => resizeTrackStepData(track, count)));
+    setPatterns((old) => Object.fromEntries(Object.entries(old).map(([pattern, byTrack]) => [pattern, Object.fromEntries(Object.entries(byTrack).map(([trackId, steps]) => [trackId, resizeSteps(steps, count)]))])) as PatternSteps);
+  }
 
   function changeArrangementSlotCount(count: ArrangementSlotCount) {
     if (!arrangementSlotCounts.includes(count)) return;
@@ -507,7 +518,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       setStatus("Preloading samples...");
       await preloadProjectAudio(tracksRef.current, patternsRef.current, activePatternRef.current);
       setStatus("Exporting current pattern...");
-      const result = await renderPatternDryWav(tracksRef.current, bpm);
+      const stepCount = Math.max(1, tracksRef.current[0]?.steps.length ?? 16);
+      const result = await renderPatternDryWav(tracksRef.current, bpm, undefined, stepCount);
       downloadBlob(result.blob, "workstation-current-pattern.wav");
       setStatus(result.skipped.length ? `Current pattern WAV exported. Some samples were skipped: ${result.skipped.join(", ")}.` : "Current pattern WAV exported. Dry render; FX export coming soon.");
     } catch (error) { setStatus(`Export failed: ${error instanceof Error ? error.message : "Export render failed."}`); }
@@ -525,8 +537,29 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     } catch (error) { setStatus(`Export failed: ${error instanceof Error ? error.message : "Arrangement render failed."}`); }
   }
 
-  function exportStemsZip() {
-    setStatus("Coming soon: Stems ZIP export. JSZip could not be added in this environment, so the button is disabled instead of broken.");
+  async function exportStemsZip() {
+    try {
+      setStatus("Rendering stems...");
+      await preloadProjectAudio(tracksRef.current, patternsRef.current, activePatternRef.current);
+      const stepCount = Math.max(1, tracksRef.current[0]?.steps.length ?? 16);
+      const hasSolo = tracksRef.current.some((track) => track.settings.solo);
+      const files: { filename: string; blob: Blob }[] = [];
+      const skipped: string[] = [];
+      for (const track of tracksRef.current) {
+        if (!track.assignedSample || track.settings.mute || (hasSolo && !track.settings.solo)) { if (!track.assignedSample) skipped.push(track.name); continue; }
+        const stemTrack = resizeTrackStepData(track, stepCount);
+        try {
+          const result = await renderPatternDryWav([stemTrack], bpm, undefined, stepCount);
+          skipped.push(...result.skipped);
+          files.push({ filename: `track-${track.id}-${safeFilename(track.mode === "sliced" ? `${track.name}-sliced` : track.name)}.wav`, blob: result.blob });
+        } catch { skipped.push(track.assignedSample.name); }
+      }
+      if (!files.length) { setStatus("No stems exported. Add unmuted tracks with loaded samples first."); return; }
+      setStatus("Creating ZIP...");
+      const zip = await createStoredZip(files);
+      downloadBlob(zip, "workstation-stems.zip");
+      setStatus(skipped.length ? `Stems ZIP exported. Skipped ${skipped.length} tracks/samples.` : "Stems ZIP exported.");
+    } catch (error) { setStatus(`Export failed: ${error instanceof Error ? error.message : "Stems ZIP export failed."}`); }
   }
 
   function exportProjectJson() {
