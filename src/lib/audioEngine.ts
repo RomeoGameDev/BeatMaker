@@ -3,6 +3,7 @@ import { createToneEffectNodes } from "@/lib/effects";
 import { semitoneDiff } from "@/lib/musicTheory";
 import { loadSampleAudioBuffer, SampleLoadError } from "@/lib/sampleLoader";
 import { normalizeSamplePath } from "@/lib/samplePaths";
+import { getCachedBuffer } from "@/lib/sampleCache";
 import type { GuitarLabEffects, GuitarLabMode, NoteDuration, Sample, TrackEffect, TrackSettings } from "@/types";
 
 const players = new Map<string, Tone.Player>();
@@ -110,7 +111,7 @@ export async function playHtmlAudioFallback(sample: Sample): Promise<OneShotResu
   }
 }
 
-export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = [], maxDurationSeconds?: number): Promise<OneShotResult & { player?: Tone.Player }> {
+export async function triggerSample(sample: Sample | undefined, settings: TrackSettings, time: Tone.Unit.Time = Tone.now(), effects: TrackEffect[] = [], maxDurationSeconds?: number, options: { requireCached?: boolean; bypassEffects?: boolean } = {}): Promise<OneShotResult & { player?: Tone.Player }> {
   if (!sample?.path) {
     const result = oneShotResult(false, "missing", "Sample file missing or unsupported.");
     console.warn(result.message, { sample });
@@ -128,10 +129,18 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     // each hit gets a fresh Player so fast clicks and overlapping steps cannot
     // reuse a started/stopped source in an unsafe way.
     const sampleUrl = normalizeSamplePath(sample.path);
-    if (isDevelopment) console.debug("Loading sample", sampleDebug(sample, sampleUrl));
+    if (isDevelopment && !options.requireCached) console.debug("Loading sample", sampleDebug(sample, sampleUrl));
 
     player = new Tone.Player({ autostart: false });
-    try {
+    const cachedBuffer = getCachedBuffer(sample);
+    if (cachedBuffer) {
+      // Live sequencer playback preloads samples before Transport starts, so ticks
+      // can set an already-decoded buffer and avoid fetch/decode jitter.
+      player.buffer = cachedBuffer;
+    } else if (options.requireCached) {
+      disposeActivePlayer(player);
+      return oneShotResult(false, "not-loaded", "Sample not loaded yet.");
+    } else try {
       const loaded = await loadSampleAudioBuffer(sample);
       player.buffer.set(loaded.audioBuffer);
     } catch (loadError) {
@@ -172,7 +181,9 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     const trackGain = new Tone.Gain(safeSettings.volume);
     tempNodes = [trackGain];
     try {
-      tempNodes.push(...createToneEffectNodes(effects));
+      // Live sequencer hits bypass per-hit FX for now because rebuilding reverb,
+      // delay, and filter nodes on every 16th-note tick caused audible lag.
+      if (!options.bypassEffects) tempNodes.push(...createToneEffectNodes(effects));
       player.chain(...tempNodes, Tone.getDestination());
     } catch (routingError) {
       tempNodes.forEach((node) => { try { node.dispose(); } catch {} activeNodes.delete(node); });
@@ -204,15 +215,17 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
   }
 }
 
-export async function triggerSampleRegion({ sample, startMs, endMs, time = Tone.now(), volume = 1, pitchSemitones = 0, fadeInMs = 0, fadeOutMs = 5, effects = [] }: { sample?: Sample; startMs: number; endMs: number; time?: Tone.Unit.Time; volume?: number; pitchSemitones?: number; fadeInMs?: number; fadeOutMs?: number; effects?: TrackEffect[]; }) {
+export async function triggerSampleRegion({ sample, startMs, endMs, time = Tone.now(), volume = 1, pitchSemitones = 0, fadeInMs = 0, fadeOutMs = 5, effects = [], requireCached = false, bypassEffects = false }: { sample?: Sample; startMs: number; endMs: number; time?: Tone.Unit.Time; volume?: number; pitchSemitones?: number; fadeInMs?: number; fadeOutMs?: number; effects?: TrackEffect[]; requireCached?: boolean; bypassEffects?: boolean; }) {
   if (!sample) return oneShotResult(false, "missing", "Sample file missing or unsupported.");
-  const loaded = await loadSampleAudioBuffer(sample).catch((error) => { throw error; });
-  const durationMs = loaded.audioBuffer.duration * 1000;
+  const cached = getCachedBuffer(sample);
+  if (!cached && requireCached) return oneShotResult(false, "not-loaded", "Sample not loaded yet.");
+  const audioBuffer = cached?.get() ?? (await loadSampleAudioBuffer(sample).catch((error) => { throw error; })).audioBuffer;
+  const durationMs = audioBuffer.duration * 1000;
   const start = clamp(startMs, 0, Math.max(0, durationMs - 1));
   const end = clamp(endMs, start + 1, durationMs);
   if (end <= start) return oneShotResult(false, "invalid-duration", "Skipped slice: invalid slice duration.");
   const settings: TrackSettings = { startOffsetMs: start, endTrimMs: Math.max(0, durationMs - end), fadeInMs, fadeOutMs, fadeInCurve: "linear", fadeOutCurve: "linear", volume, mute: false, solo: false, pitchSemitones };
-  return triggerSample(sample, settings, time, effects, (end - start) / 1000);
+  return triggerSample(sample, settings, time, effects, (end - start) / 1000, { requireCached, bypassEffects });
 }
 
 export async function playSampleRegionExclusive(sample: Sample | undefined, startMs: number, endMs: number, options: { volume?: number; pitchSemitones?: number; fadeInMs?: number; fadeOutMs?: number; effects?: TrackEffect[] } = {}) {
@@ -250,6 +263,8 @@ export async function previewPitchedNotes({ sample, rootNote, notes, mode, bpm, 
     return oneShotResult(false, "error", "Could not preview Guitar Lab notes.");
   }
 }
+
+export function getActiveAudioStats() { return { activePlayerCount: activePlayers.size }; }
 
 export function stopTransport() {
   Tone.Transport.stop();

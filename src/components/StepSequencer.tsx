@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { CSSProperties } from "react";
 import type { SequencerTrack, Sample, TrackSettings, SequencerStep } from "@/types";
 import { formatChordLabel } from "@/lib/musicTheory";
@@ -57,7 +58,7 @@ export function makeInitialTracks(defaultSample?: Sample): SequencerTrack[] {
   }));
 }
 
-export default function StepSequencer({ tracks, bpm, currentStep, selectedTrackId, selectedStepIndex, onToggleStep, onToggleSliceStep, onToggleMute, onToggleSolo, onSelectTrack, onAddTrack, onRemoveTrack, activePattern, stepCount, onStepCountChange, onTrackSettingsChange }: Props) {
+function StepSequencer({ tracks, bpm, currentStep, selectedTrackId, selectedStepIndex, onToggleStep, onToggleSliceStep, onToggleMute, onToggleSolo, onSelectTrack, onAddTrack, onRemoveTrack, activePattern, stepCount, onStepCountChange, onTrackSettingsChange }: Props) {
   return (
     <div className="sequencer-panel">
       <div className="sequencer-actions"><strong>Editing Pattern {activePattern}</strong><label className="field-label">Steps<select value={stepCount} onChange={(event) => onStepCountChange(Number(event.target.value))}>{[4, 8, 16, 24, 32].map((count) => <option key={count} value={count}>{count}</option>)}</select></label><button type="button" onClick={onAddTrack}>+ Add Track</button></div>
@@ -81,3 +82,5 @@ export default function StepSequencer({ tracks, bpm, currentStep, selectedTrackI
     </div>
   );
 }
+
+export default memo(StepSequencer);

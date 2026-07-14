@@ -10,9 +10,9 @@ import WaveformSlicer from "@/components/WaveformSlicer";
 import StepSequencer, { defaultTrackSettings, getTrackColor, makeInitialTracks, makeSteps } from "@/components/StepSequencer";
 import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
-import WindowPanel from "@/components/WindowPanel";
 import TabbedPanel from "@/components/TabbedPanel";
-import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion, playSampleRegionExclusive } from "@/lib/audioEngine";
+import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion, playSampleRegionExclusive, getActiveAudioStats } from "@/lib/audioEngine";
+import { getSampleCacheStats, preloadProjectAudio } from "@/lib/sampleCache";
 import { downloadBlob, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
 import { deleteRenderedSample, hasRenderedSample, loadRenderedSamples, saveRenderedSample } from "@/lib/renderedSampleStore";
 import { SampleLoadError } from "@/lib/sampleLoader";
@@ -29,9 +29,12 @@ const FONT_SIZE_STORAGE_KEY = "beatmaker.fontSize";
 const HELPERS_STORAGE_KEY = "beatmaker.showHelpers";
 const LIBRARY_TAB_STORAGE_KEY = "beatmaker.libraryTab";
 const TOOL_TAB_STORAGE_KEY = "beatmaker.toolTab";
+const LIBRARY_COLLAPSED_STORAGE_KEY = "beatmaker.libraryCollapsed";
+const TOOLS_COLLAPSED_STORAGE_KEY = "beatmaker.toolsCollapsed";
 type LayoutMode = "compact" | "balanced" | "spacious";
 type LibraryTab = "library" | "export";
 type ToolTab = "trackControls" | "slicer" | "guitar";
+type BottomTab = "sequencer" | "arrangement";
 type PlayheadSource = "track-controls" | "slicer" | "sequencer" | "sample-library" | "arrangement" | "guitar-tools";
 
 export default function HomeClient({ samples: initialSamples }: { samples: Sample[] }) {
@@ -50,6 +53,11 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const [showHelpers, setShowHelpers] = useState(true);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("trackControls");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("sequencer");
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [toolsCollapsed, setToolsCollapsed] = useState(false);
+  const [showPerfDebug, setShowPerfDebug] = useState(false);
+  const [perfStats, setPerfStats] = useState(() => ({ ...getSampleCacheStats(), ...getActiveAudioStats(), schedulerActive: false }));
   const schedulerIdRef = useRef<number | null>(null);
   const arrangementTimerRef = useRef<number | null>(null);
   const tracksRef = useRef(tracks);
@@ -66,6 +74,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   const [playheadMs, setPlayheadMs] = useState<{ source: PlayheadSource; sampleId?: string; trackId?: number; valueMs: number } | undefined>(undefined);
   const activeLoopPlayersRef = useRef(new Map<number, { player?: Tone.Player; untilStep: number }>());
   const playheadFrameRef = useRef<number | null>(null);
+  const toolTabRef = useRef(toolTab);
+  const toolsCollapsedRef = useRef(toolsCollapsed);
 
   const selectedSkin = useMemo(() => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0], [selectedSkinId]);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId);
@@ -83,13 +93,18 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     if (savedLibraryTab === "library" || savedLibraryTab === "export") setLibraryTab(savedLibraryTab);
     const savedToolTab = window.localStorage.getItem(TOOL_TAB_STORAGE_KEY);
     if (savedToolTab === "trackControls" || savedToolTab === "slicer" || savedToolTab === "guitar") setToolTab(savedToolTab);
+    setLibraryCollapsed(window.localStorage.getItem(LIBRARY_COLLAPSED_STORAGE_KEY) === "true");
+    setToolsCollapsed(window.localStorage.getItem(TOOLS_COLLAPSED_STORAGE_KEY) === "true");
   }, []);
   useEffect(() => { window.localStorage.setItem(THEME_STORAGE_KEY, selectedSkin.id); }, [selectedSkin.id]);
   useEffect(() => { window.localStorage.setItem(LAYOUT_STORAGE_KEY, layoutMode); }, [layoutMode]);
   useEffect(() => { window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, fontSize); }, [fontSize]);
   useEffect(() => { window.localStorage.setItem(HELPERS_STORAGE_KEY, String(showHelpers)); }, [showHelpers]);
   useEffect(() => { window.localStorage.setItem(LIBRARY_TAB_STORAGE_KEY, libraryTab); }, [libraryTab]);
-  useEffect(() => { window.localStorage.setItem(TOOL_TAB_STORAGE_KEY, toolTab); }, [toolTab]);
+  useEffect(() => { toolTabRef.current = toolTab; window.localStorage.setItem(TOOL_TAB_STORAGE_KEY, toolTab); }, [toolTab]);
+  useEffect(() => { window.localStorage.setItem(LIBRARY_COLLAPSED_STORAGE_KEY, String(libraryCollapsed)); }, [libraryCollapsed]);
+  useEffect(() => { toolsCollapsedRef.current = toolsCollapsed; window.localStorage.setItem(TOOLS_COLLAPSED_STORAGE_KEY, String(toolsCollapsed)); }, [toolsCollapsed]);
+  useEffect(() => { if (!showPerfDebug) return; const id = window.setInterval(() => setPerfStats({ ...getSampleCacheStats(), ...getActiveAudioStats(), schedulerActive: schedulerIdRef.current !== null }), 500); return () => window.clearInterval(id); }, [showPerfDebug]);
   useEffect(() => { setBpm(bpm); }, [bpm]);
   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
   useEffect(() => { samplesRef.current = samples; }, [samples]);
@@ -269,6 +284,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   }
 
   function animatePlayhead(track: SequencerTrack, source: PlayheadSource = "track-controls") {
+    if ((source === "track-controls" || source === "sequencer") && (toolsCollapsedRef.current || toolTabRef.current !== "trackControls")) return;
     clearPlayhead();
     const sampleMs = track.assignedSample?.durationMs ?? 10000;
     const start = Math.min(track.settings.startOffsetMs, Math.max(0, sampleMs - 1));
@@ -320,7 +336,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       if (!track.assignedSample || track.settings.mute) return;
       if (track.mode === "sliced") {
         if (hasSolo && !track.settings.solo) return;
-        (track.slices ?? []).forEach((slice) => { if (!track.sliceSteps?.[slice.id]?.[step]?.active) return; void triggerSampleRegion({ sample: track.assignedSample, startMs: slice.startMs, endMs: slice.endMs, time, volume: track.settings.volume, pitchSemitones: track.settings.pitchSemitones, fadeInMs: slice.attackMs ?? slice.fadeInMs, fadeOutMs: slice.fadeOutMs, effects: track.effects }).then((result) => { if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); }).catch(() => setStatus("Skipped slice: sample could not be decoded.")); });
+        (track.slices ?? []).forEach((slice) => { if (!track.sliceSteps?.[slice.id]?.[step]?.active || slice.endMs <= slice.startMs) return; void triggerSampleRegion({ sample: track.assignedSample, startMs: slice.startMs, endMs: slice.endMs, time, volume: track.settings.volume, pitchSemitones: track.settings.pitchSemitones, fadeInMs: slice.attackMs ?? slice.fadeInMs, fadeOutMs: slice.fadeOutMs, effects: track.effects, requireCached: true, bypassEffects: true }).then((result) => { if (!result.ok && track.id === selectedTrackId) setStatus(result.message); }).catch(() => setStatus("Sample not loaded yet.")); });
         return;
       }
       const stepData = track.steps[step];
@@ -331,7 +347,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
         if (track.id === selectedTrackId) animatePlayhead(track, "sequencer");
         chordNotes.forEach((note) => {
           const pitchSemitones = track.settings.pitchSemitones + semitoneDiff(track.rootNote, note);
-          void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects).then((result) => { if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); });
+          void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, undefined, { requireCached: true, bypassEffects: true }).then((result) => { if (!result.ok && track.id === selectedTrackId) setStatus(result.message); });
         });
         return;
       }
@@ -346,7 +362,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       if (track.id === selectedTrackId) animatePlayhead(track, "sequencer");
       const regionSeconds = (60 / bpm / 4) * loopLength;
       const duration = isLoop && (track.loopMode === "cut-to-step-length" || track.loopMode === "loop-region") ? regionSeconds : undefined;
-      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, duration).then((result) => { if (isLoop && result.ok) activeLoopPlayersRef.current.set(track.id, { player: result.player, untilStep: absoluteStep + loopLength }); if (!result.ok && result.status === "decode-failed" && track.id === selectedTrackId) setStatus(result.message); });
+      void triggerSample(track.assignedSample, { ...track.settings, pitchSemitones }, time, track.effects, duration, { requireCached: true, bypassEffects: true }).then((result) => { if (isLoop && result.ok) activeLoopPlayersRef.current.set(track.id, { player: result.player, untilStep: absoluteStep + loopLength }); if (!result.ok && track.id === selectedTrackId) setStatus(result.message); });
     });
   }
 
@@ -447,6 +463,9 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     await startAudio();
     if (exclusive) stopSequencer(false); else disposeSequencer();
     clearPlayhead();
+    setStatus("Preloading samples…");
+    await preloadProjectAudio(tracksRef.current, patternsRef.current, activePatternRef.current);
+    setPerfStats({ ...getSampleCacheStats(), ...getActiveAudioStats(), schedulerActive: schedulerIdRef.current !== null });
     setBpm(bpm);
     let absoluteStep = 0;
     schedulerIdRef.current = Tone.Transport.scheduleRepeat((time) => {
@@ -458,7 +477,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     }, "16n");
     Tone.Transport.start();
     setIsPlaying(true);
-    setStatus("Playing sequencer.");
+    setStatus(tracksRef.current.some((track) => track.effects.some((effect) => effect.enabled)) ? "Playing sequencer. Live FX optimization coming soon; playback may be dry." : "Playing sequencer.");
   }
 
   async function renderTrack(track: SequencerTrack, variant: "processed" | "dry") {
@@ -513,13 +532,14 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   return (
     <main className={appClasses} style={themeStyle}>
       <Toolbar bpm={bpm} isPlaying={isPlaying} status={status} skins={skins} selectedSkinId={selectedSkinId} fontSize={fontSize} layoutMode={layoutMode} showHelpers={showHelpers} onPlay={startSequencer} onStop={stopSequencer} onBpmChange={setBpmState} onSkinChange={setSelectedSkinId} onFontSizeChange={setFontSize} onLayoutModeChange={setLayoutMode} onShowHelpersChange={setShowHelpers} onResetLayout={() => { setLayoutMode("balanced"); setFontSize("normal"); setShowHelpers(true); setLibraryTab("library"); setToolTab("trackControls"); }} />
+      {showHelpers && <button type="button" className="debug-toggle" onClick={() => setShowPerfDebug((show) => !show)}>{showPerfDebug ? "Hide" : "Show"} perf debug</button>}
+      {showPerfDebug && <div className="perf-debug">Cached: {perfStats.cachedSampleCount} · Loading: {perfStats.loadingSampleCount} · Failed: {perfStats.failedSampleCount} · Players: {perfStats.activePlayerCount} · Scheduler: {perfStats.schedulerActive ? "active" : "idle"} · Last preload: {perfStats.lastPreloadMs}ms</div>}
       <div className="workspace-grid">
-        <div className="library-column"><TabbedPanel<LibraryTab> title="Library / Export" activeTab={libraryTab} onTabChange={setLibraryTab} tabs={[{ id: "library", label: "Sample Library", content: <SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => setSelectedSampleId(sample.id)} onPlay={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /> }, { id: "export", label: "Export", content: <ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /> }]} /></div>
-        <div className="tools-column"><TabbedPanel<ToolTab> title="Tools" activeTab={toolTab} onTabChange={setToolTab} tabs={[{ id: "trackControls", label: "Track Controls", content: <TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPlay={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={(playheadMs?.source === "track-controls" || (playheadMs?.source === "sequencer" && playheadMs.trackId === selectedTrack?.id)) ? playheadMs.valueMs : undefined} /> }, { id: "slicer", label: "Waveform / Slicer", content: <WaveformSlicer selectedSample={selectedSample} onEnsureDuration={ensureDuration} onPlaySample={previewSample} onPlaySlice={previewSlice} onPlaySelection={playSelection} onStopPreview={() => stopSequencer()} onCreateSlicedTrack={createSlicedTrack} onStatus={setStatus} playheadMs={playheadMs?.source === "slicer" && playheadMs.sampleId === selectedSample?.id ? playheadMs.valueMs : undefined} /> }, { id: "guitar", label: "Guitar Tools", content: <GuitarTools samples={samples} bpm={bpm} onPlayExclusive={playExclusive} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /> }]} /></div>
+        <div className="library-column"><TabbedPanel<LibraryTab> title="Library / Export" collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} activeTab={libraryTab} onTabChange={setLibraryTab} tabs={[{ id: "library", label: "Sample Library", content: <SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => setSelectedSampleId(sample.id)} onPlay={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /> }, { id: "export", label: "Export", content: <ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /> }]} /></div>
+        <div className="tools-column"><TabbedPanel<ToolTab> title="Tools" collapsed={toolsCollapsed} onCollapsedChange={setToolsCollapsed} activeTab={toolTab} onTabChange={setToolTab} tabs={[{ id: "trackControls", label: "Track Controls", content: <TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPlay={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={!toolsCollapsed && toolTab === "trackControls" && (playheadMs?.source === "track-controls" || (playheadMs?.source === "sequencer" && playheadMs.trackId === selectedTrack?.id)) ? playheadMs.valueMs : undefined} /> }, { id: "slicer", label: "Waveform / Slicer", content: <WaveformSlicer selectedSample={selectedSample} onEnsureDuration={ensureDuration} onPlaySample={previewSample} onPlaySlice={previewSlice} onPlaySelection={playSelection} onStopPreview={() => stopSequencer()} onCreateSlicedTrack={createSlicedTrack} onStatus={setStatus} playheadMs={!toolsCollapsed && toolTab === "slicer" && playheadMs?.source === "slicer" && playheadMs.sampleId === selectedSample?.id ? playheadMs.valueMs : undefined} /> }, { id: "guitar", label: "Guitar Tools", content: <GuitarTools samples={samples} bpm={bpm} onPlayExclusive={playExclusive} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /> }]} /></div>
       </div>
       <div className="sequencer-workspace">
-        <WindowPanel title="Arrangement" className="arrangement-strip"><ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /></WindowPanel>
-      <WindowPanel title="Step Sequencer" className="sequencer-window bottom-sequencer"><StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onToggleSliceStep={toggleSliceStep} onToggleMute={toggleMute} onToggleSolo={toggleSolo} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} onTrackSettingsChange={updateTrackSettings} /></WindowPanel>
+        <TabbedPanel<BottomTab> title="Sequencer / Arrangement" className="bottom-sequencer" activeTab={bottomTab} onTabChange={setBottomTab} tabs={[{ id: "sequencer", label: "Step Sequencer", content: <StepSequencer tracks={tracks} bpm={bpm} currentStep={currentStep} selectedTrackId={selectedTrackId} selectedStepIndex={selectedStepIndex} onToggleStep={toggleStep} onToggleSliceStep={toggleSliceStep} onToggleMute={toggleMute} onToggleSolo={toggleSolo} onSelectTrack={selectTrack} onAddTrack={addTrack} onRemoveTrack={removeTrack} activePattern={activePattern} stepCount={tracks[0]?.steps.length ?? 16} onStepCountChange={changeStepCount} onTrackSettingsChange={updateTrackSettings} /> }, { id: "arrangement", label: "Arrangement", content: <ArrangementPanel activePattern={activePattern} patterns={availablePatterns} copiedPattern={copiedPattern ? "copied" : undefined} timeline={timeline} arrangementPlaying={arrangementPlaying} onSelectPattern={loadPattern} onAddPattern={addPattern} onRemovePattern={removePattern} onCopyPattern={copyPattern} onPastePattern={pastePattern} onCycleSlot={cycleTimelineSlot} onSlotCountChange={changeArrangementSlotCount} onPlayArrangement={playArrangement} onStop={stopArrangement} /> }]} />
       </div>
     </main>
   );
