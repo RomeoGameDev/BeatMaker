@@ -78,7 +78,7 @@ export default function TrackControls({ track, selectedStepIndex, onChange, onTr
   };
   const updateNumber = (key: SliderControl["key"], max?: number) => (event: ChangeEvent<HTMLInputElement>) => onChange(track.id, { [key]: Math.min(Number(event.target.value), max ?? Number.MAX_SAFE_INTEGER) } as Partial<TrackSettings>);
   const composerNotes = selectedStep?.notes?.length ? selectedStep.notes : selectedStep?.note ? [selectedStep.note] : [];
-  const decodeFailed = track.assignedSample?.loadStatus === "decode failed";
+  const decodeFailed = track.assignedSample?.loadStatus === "decode-failed";
 
   return (
     <div className="track-controls">

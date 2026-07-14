@@ -1,4 +1,4 @@
-import { loadSampleAudioBuffer } from "@/lib/sampleLoader";
+import { loadSampleBuffer } from "@/lib/sampleCache";
 import { normalizeSamplePath } from "@/lib/samplePaths";
 import type { Sample } from "@/types";
 
@@ -16,7 +16,7 @@ export async function decodeSampleDuration(sample: Sample): Promise<Pick<Sample,
   const key = normalizeSamplePath(sample.path);
   if (!durationCache.has(key)) {
     durationCache.set(key, (async () => {
-      const loaded = await loadSampleAudioBuffer(sample);
+      const loaded = await loadSampleBuffer(sample);
       const durationSeconds = loaded.audioBuffer.duration;
       return { durationSeconds, durationMs: Math.round(durationSeconds * 1000), isLong: durationSeconds > 2, normalizedPath: loaded.normalizedPath, loadStatus: "loaded" as const, lastErrorMessage: undefined };
     })());

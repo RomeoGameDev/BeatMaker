@@ -12,8 +12,8 @@ import Toolbar from "@/components/Toolbar";
 import TrackControls from "@/components/TrackControls";
 import TabbedPanel from "@/components/TabbedPanel";
 import { setBpm, startAudio, stopTransport, stopAllAudio, Tone, playSample, playHtmlAudioFallback, triggerSample, triggerSampleRegion, playSampleRegionExclusive, getActiveAudioStats } from "@/lib/audioEngine";
-import { getSampleCacheStats, preloadProjectAudio } from "@/lib/sampleCache";
-import { downloadBlob, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
+import { getSampleCacheStats, loadSampleBuffer, preloadProjectAudio } from "@/lib/sampleCache";
+import { downloadBlob, renderArrangementDryWav, renderPatternDryWav, renderTrackDryWav, safeFilename } from "@/lib/renderWav";
 import { deleteRenderedSample, hasRenderedSample, loadRenderedSamples, saveRenderedSample } from "@/lib/renderedSampleStore";
 import { SampleLoadError } from "@/lib/sampleLoader";
 import { decodeSampleDuration, markSampleDuration } from "@/lib/sampleDuration";
@@ -147,8 +147,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     try { const meta = await decodeSampleDuration(sample); const updated = { ...sample, ...meta }; applySampleDuration(updated); return updated; }
     catch (error) {
       const lastErrorMessage = error instanceof Error ? error.message : String(error);
-      const loadStatus = error instanceof SampleLoadError ? error.status : "decode failed";
-      const failedSample = { ...sample, normalizedPath: error instanceof SampleLoadError ? error.normalizedPath : sample.normalizedPath, loadStatus, lastErrorMessage };
+      const loadStatus = error instanceof SampleLoadError ? error.status : "decode-failed";
+      const failedSample = { ...sample, normalizedPath: error instanceof SampleLoadError ? error.normalizedPath : sample.normalizedPath, loadStatus, lastError: lastErrorMessage, lastErrorMessage };
       applySampleDuration(failedSample);
       console.warn("Could not decode sample duration.", error);
       return failedSample;
@@ -158,6 +158,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   function assignSample(sample: Sample) {
     setSelectedSampleId(sample.id);
     void ensureDuration(sample);
+    void loadSampleBuffer(sample).catch(() => undefined);
     setTracks((oldTracks) => oldTracks.map((track) => track.id === selectedTrackId ? { ...track, assignedSample: { ...sample, normalizedPath: sample.normalizedPath }, loopMode: (sample.type === "loop" || sample.isLong) ? "play-full" : "oneshot", loopLengthSteps: track.loopLengthSteps ?? 16, retriggerLoop: track.retriggerLoop ?? false } : track));
     setStatus(`${sample.name} assigned to Track ${selectedTrackId}.`);
   }
@@ -209,12 +210,12 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     const lower = base.toLowerCase();
     const category = lower.includes("kick") ? "kick" : lower.includes("snare") ? "snare" : lower.includes("hat") || lower.includes("hihat") ? "hat" : lower.includes("clap") ? "clap" : lower.includes("perc") ? "perc" : lower.includes("bass") ? "bass" : lower.includes("guitar") ? "guitar" : lower.includes("melody") || lower.includes("melodic") || lower.includes("loop") ? "melody" : "other";
     let durationSeconds: number | undefined; let loadStatus: Sample["loadStatus"] = "loaded"; let lastErrorMessage: string | undefined;
-    try { const meta = await decodeSampleDuration({ id: "temp", name: base, filename: file.name, type: "oneshot", category, path: objectUrl }); durationSeconds = meta.durationSeconds; } catch (error) { loadStatus = "decode failed"; lastErrorMessage = error instanceof Error ? error.message : String(error); }
+    try { const meta = await decodeSampleDuration({ id: "temp", name: base, filename: file.name, type: "oneshot", category, path: objectUrl }); durationSeconds = meta.durationSeconds; } catch (error) { loadStatus = "decode-failed"; lastErrorMessage = error instanceof Error ? error.message : String(error); }
     const type = requestedType === "auto" ? ((durationSeconds ?? 0) > 2 ? "loop" : "oneshot") : requestedType;
     const id = `imported-${Date.now()}`;
     const sample = markSampleDuration({ id, name: base, filename: file.name, type, category, path: objectUrl, isImported: true, source: "indexeddb", createdAt: Date.now(), loadStatus, lastErrorMessage }, durationSeconds ?? 0);
     setSamples((old) => [sample, ...old]); setSelectedSampleId(id);
-    try { await saveRenderedSample({ id, name: base, filename: file.name, type, category, durationMs: sample.durationMs, createdAt: sample.createdAt ?? Date.now(), audio: file, metadata: { source: "imported-sample", decodeStatus: loadStatus }, isImported: true }); setStatus(loadStatus === "decode failed" ? "Imported, but not WebAudio-decodable. Convert to PCM WAV for editing." : `${base} imported and saved locally.`); }
+    try { await saveRenderedSample({ id, name: base, filename: file.name, type, category, durationMs: sample.durationMs, createdAt: sample.createdAt ?? Date.now(), audio: file, metadata: { source: "imported-sample", decodeStatus: loadStatus }, isImported: true }); setStatus(loadStatus === "decode-failed" ? "Imported, but not WebAudio-decodable. Convert to PCM WAV for editing." : `${base} imported and saved locally.`); }
     catch (error) { console.warn("Could not save imported sample.", error); setStatus("Imported for this session only; IndexedDB save failed."); }
   }
 
@@ -279,7 +280,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     clearPlayhead();
     const duration = Math.max(120, end - start);
     const started = performance.now();
-    const tick = () => { const elapsed = performance.now() - started; setPlayheadMs({ source, sampleId, trackId, valueMs: start + Math.min(duration, elapsed) }); if (elapsed < duration) playheadFrameRef.current = requestAnimationFrame(tick); else playheadFrameRef.current = null; };
+    const tick = () => { if (document.hidden) { playheadFrameRef.current = requestAnimationFrame(tick); return; } const elapsed = performance.now() - started; setPlayheadMs({ source, sampleId, trackId, valueMs: start + Math.min(duration, elapsed) }); if (elapsed < duration) playheadFrameRef.current = requestAnimationFrame(tick); else playheadFrameRef.current = null; };
     tick();
   }
 
@@ -293,6 +294,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     const started = performance.now();
     // TODO: Replace this approximate visual timer with sample-accurate playhead sync later.
     const tick = () => {
+      if (document.hidden) { playheadFrameRef.current = requestAnimationFrame(tick); return; }
       const elapsed = performance.now() - started;
       setPlayheadMs({ source, sampleId: track.assignedSample?.id, trackId: track.id, valueMs: start + Math.min(duration, elapsed) });
       if (elapsed < duration) playheadFrameRef.current = requestAnimationFrame(tick);
@@ -304,7 +306,8 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
   async function previewSample(sample: Sample) {
     await playExclusive(async () => {
       const updated = await ensureDuration(sample);
-      animateRegionPlayhead(0, updated.durationMs ?? 10000, "sample-library", updated.id);
+      setStatus("Loading sample...");
+      animateRegionPlayhead(0, updated.durationMs ?? 1000, "sample-library", updated.id);
       const result = await playSample(updated);
       setStatus(result.ok ? "Playing sample." : result.message);
     });
@@ -317,8 +320,9 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
     }
 
     await playExclusive(async () => {
-    animatePlayhead(track, "track-controls");
+    setStatus("Loading sample...");
     const updated = await ensureDuration(track.assignedSample!);
+    animatePlayhead({ ...track, assignedSample: updated }, "track-controls");
     const result = await triggerSample(updated, track.settings, Tone.now(), track.effects);
     if (result.status === "decode-failed") {
       const fallbackResult = await playHtmlAudioFallback(updated);
@@ -482,9 +486,12 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
 
   async function renderTrack(track: SequencerTrack, variant: "processed" | "dry") {
     try {
+      setStatus("Preloading samples...");
+      await preloadProjectAudio([track]);
+      setStatus("Rendering selected track...");
       const blob = await renderTrackDryWav(track);
       const suffix = variant === "dry" ? "dry" : "processed";
-      const baseName = `${safeFilename(track.assignedSample?.name ?? "sample")}-rendered-${Date.now()}`;
+      const baseName = variant === "dry" ? `track-${track.id}-${safeFilename(track.name)}` : `${safeFilename(track.assignedSample?.name ?? "sample")}-rendered-${Date.now()}`;
       await addRenderedSampleFromBlob({ blob, id: `rendered-${Date.now()}`, name: `${track.assignedSample?.name ?? "sample"}_rendered`, filename: `${baseName}.wav`, type: track.assignedSample?.type ?? "oneshot", category: "rendered", durationSeconds: blob.size ? (track.assignedSample?.durationSeconds ?? 0) : 0, metadata: { source: "track-render", trackId: track.id, variant } });
       if (variant === "dry") downloadBlob(blob, `${baseName}.wav`);
       setStatus(variant === "dry" ? "Rendered new sample and downloaded WAV. FX rendering into new sample coming soon." : "Rendered new sample in the Sample Library. FX rendering into new sample coming soon.");
@@ -497,10 +504,29 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
 
   async function exportCurrentPatternWav() {
     try {
-      const blob = await renderPatternDryWav(tracksRef.current, bpm);
-      downloadBlob(blob, "workstation-music-current-pattern.wav");
-      setStatus("Pattern WAV exported. FX export coming soon; exported dry pattern.");
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Export render failed."); }
+      setStatus("Preloading samples...");
+      await preloadProjectAudio(tracksRef.current, patternsRef.current, activePatternRef.current);
+      setStatus("Exporting current pattern...");
+      const result = await renderPatternDryWav(tracksRef.current, bpm);
+      downloadBlob(result.blob, "workstation-current-pattern.wav");
+      setStatus(result.skipped.length ? `Current pattern WAV exported. Some samples were skipped: ${result.skipped.join(", ")}.` : "Current pattern WAV exported. Dry render; FX export coming soon.");
+    } catch (error) { setStatus(`Export failed: ${error instanceof Error ? error.message : "Export render failed."}`); }
+  }
+
+  async function exportArrangementWav() {
+    try {
+      setStatus("Preloading samples...");
+      await preloadProjectAudio(tracksRef.current, patternsRef.current, activePatternRef.current);
+      setStatus("Rendering arrangement...");
+      const snapshot = { ...patternsRef.current, [activePatternRef.current]: Object.fromEntries(tracksRef.current.map((track) => [track.id, cloneSteps(track.steps)])) };
+      const result = await renderArrangementDryWav(tracksRef.current, bpm, timeline, snapshot);
+      downloadBlob(result.blob, "workstation-arrangement.wav");
+      setStatus(result.skipped.length ? `Arrangement WAV exported. Some samples were skipped: ${result.skipped.join(", ")}.` : "Arrangement WAV exported. Dry render; FX export coming soon.");
+    } catch (error) { setStatus(`Export failed: ${error instanceof Error ? error.message : "Arrangement render failed."}`); }
+  }
+
+  function exportStemsZip() {
+    setStatus("Coming soon: Stems ZIP export. JSZip could not be added in this environment, so the button is disabled instead of broken.");
   }
 
   function exportProjectJson() {
@@ -535,7 +561,7 @@ export default function HomeClient({ samples: initialSamples }: { samples: Sampl
       {showHelpers && <button type="button" className="debug-toggle" onClick={() => setShowPerfDebug((show) => !show)}>{showPerfDebug ? "Hide" : "Show"} perf debug</button>}
       {showPerfDebug && <div className="perf-debug">Cached: {perfStats.cachedSampleCount} · Loading: {perfStats.loadingSampleCount} · Failed: {perfStats.failedSampleCount} · Players: {perfStats.activePlayerCount} · Scheduler: {perfStats.schedulerActive ? "active" : "idle"} · Last preload: {perfStats.lastPreloadMs}ms</div>}
       <div className="workspace-grid">
-        <div className="library-column"><TabbedPanel<LibraryTab> title="Library / Export" collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} activeTab={libraryTab} onTabChange={setLibraryTab} tabs={[{ id: "library", label: "Sample Library", content: <SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => setSelectedSampleId(sample.id)} onPlay={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /> }, { id: "export", label: "Export", content: <ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} /> }]} /></div>
+        <div className="library-column"><TabbedPanel<LibraryTab> title="Library / Export" collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} activeTab={libraryTab} onTabChange={setLibraryTab} tabs={[{ id: "library", label: "Sample Library", content: <SampleLibrary samples={samples} selectedSampleId={selectedSampleId} onSelect={(sample) => { setSelectedSampleId(sample.id); void ensureDuration(sample); }} onPlay={previewSample} onAssign={assignSample} onRemove={removeSample} onImport={importSample} /> }, { id: "export", label: "Export", content: <ExportPanel onExportProject={exportProjectJson} onImportProject={importProjectJson} onExportPatternWav={exportCurrentPatternWav} onExportArrangementWav={exportArrangementWav} onExportStemsZip={exportStemsZip} onExportSelectedTrackWav={() => selectedTrack && renderTrack(selectedTrack, "dry")} selectedTrackName={selectedTrack?.name} /> }]} /></div>
         <div className="tools-column"><TabbedPanel<ToolTab> title="Tools" collapsed={toolsCollapsed} onCollapsedChange={setToolsCollapsed} activeTab={toolTab} onTabChange={setToolTab} tabs={[{ id: "trackControls", label: "Track Controls", content: <TrackControls track={selectedTrack} selectedStepIndex={selectedStepIndex} onChange={updateTrackSettings} onTrackChange={updateTrack} bpm={bpm} onStepNoteChange={updateStepNote} onStepChordChange={updateStepChord} onStepNotesChange={updateStepNotes} onEffectsChange={updateTrackEffects} onResetSettings={resetPlaybackSettings} onClearNotes={clearStepNotes} onClearPattern={clearPattern} onResetTrack={resetTrack} onPlay={previewTrack} onRenderTrack={renderTrack} onComingSoon={(feature) => setStatus(`${feature} is coming soon.`)} playheadMs={!toolsCollapsed && toolTab === "trackControls" && (playheadMs?.source === "track-controls" || (playheadMs?.source === "sequencer" && playheadMs.trackId === selectedTrack?.id)) ? playheadMs.valueMs : undefined} /> }, { id: "slicer", label: "Waveform / Slicer", content: <WaveformSlicer selectedSample={selectedSample} onEnsureDuration={ensureDuration} onPlaySample={previewSample} onPlaySlice={previewSlice} onPlaySelection={playSelection} onStopPreview={() => stopSequencer()} onCreateSlicedTrack={createSlicedTrack} onStatus={setStatus} playheadMs={!toolsCollapsed && toolTab === "slicer" && playheadMs?.source === "slicer" && playheadMs.sampleId === selectedSample?.id ? playheadMs.valueMs : undefined} /> }, { id: "guitar", label: "Guitar Tools", content: <GuitarTools samples={samples} bpm={bpm} onPlayExclusive={playExclusive} track={selectedTrack} selectedStepIndex={selectedStepIndex} onStepNotesChange={updateStepNotes} onAddRenderedSample={addRenderedSampleFromBlob} onStatus={setStatus} /> }]} /></div>
       </div>
       <div className="sequencer-workspace">

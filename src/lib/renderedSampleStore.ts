@@ -63,7 +63,7 @@ export async function loadRenderedSamples(): Promise<Sample[]> {
     durationSeconds: record.durationMs ? record.durationMs / 1000 : undefined,
     path: URL.createObjectURL(record.audio),
     source: "indexeddb",
-    loadStatus: record.isImported && record.metadata?.decodeStatus === "decode failed" ? "decode failed" : "loaded",
+    loadStatus: record.isImported && record.metadata?.decodeStatus === "decode-failed" ? "decode-failed" : "loaded",
     lastErrorMessage: typeof record.metadata?.lastErrorMessage === "string" ? record.metadata.lastErrorMessage : undefined,
     isRendered: !record.isImported,
     isImported: record.isImported,

@@ -146,8 +146,8 @@ export async function triggerSample(sample: Sample | undefined, settings: TrackS
     } catch (loadError) {
       disposeActivePlayer(player);
       const status = loadError instanceof SampleLoadError ? loadError.status : "error";
-      const resultStatus = status === "fetch failed" ? "missing" : status === "decode failed" ? "decode-failed" : "error";
-      const message = status === "decode failed" ? "Skipped hit: sample can preview with browser audio, but cannot be sequenced/edited until converted to PCM WAV." : loadError instanceof Error ? loadError.message : `Could not load ${sampleUrl}`;
+      const resultStatus = status === "fetch-failed" ? "missing" : status === "decode-failed" ? "decode-failed" : "error";
+      const message = status === "decode-failed" ? "Skipped hit: sample can preview with browser audio, but cannot be sequenced/edited until converted to PCM WAV." : loadError instanceof Error ? loadError.message : `Could not load ${sampleUrl}`;
       return oneShotResult(false, resultStatus, message);
     }
 
