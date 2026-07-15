@@ -354,3 +354,7 @@ This pass keeps the existing feature set focused and improves slicer precision, 
 - The built-in ZIP writer stores WAV files without compression, so stem ZIPs can be large.
 - Slice snapping, automatic transient detection, and linked neighbor editing are not implemented yet.
 - Browser-decode limitations still apply: missing or decode-failed samples are skipped with toolbar warnings.
+
+## Guitar Lab Drive
+
+Guitar Lab Drive now has a wider range for string and pad samples, making stronger overdrive/distortion available from the Guitar Lab FX controls while keeping lower Drive settings subtle. Use **Output Level** to control loudness after strong drive settings.
