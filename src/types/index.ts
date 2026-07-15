@@ -112,6 +112,6 @@ export type SequencerTrack = {
 export type PatternId = string;
 export type GuitarLabMode = "chord" | "riff";
 export type NoteDuration = "1/4" | "1/8" | "1/16";
-export type GuitarLabEffects = { volume: number; pitchOffsetSemitones: number; reverbWet: number; delayWet: number; drive: number; chorusWet: number; };
+export type GuitarLabEffects = { volume: number; pitchOffsetSemitones: number; reverbWet: number; delayWet: number; drive: number; driveTone: number; driveMix: number; driveOutput: number; chorusWet: number; };
 
 export type ArrangementSlot = PatternId | "";

@@ -249,7 +249,7 @@ export async function previewPitchedNotes({ sample, rootNote, notes, mode, bpm, 
   const fx: TrackEffect[] = [
     effects?.reverbWet ? { id: "guitar-lab-reverb", type: "reverb", name: "Guitar Lab Reverb", enabled: true, params: { wet: effects.reverbWet, decay: 1.5 } } : undefined,
     effects?.delayWet ? { id: "guitar-lab-delay", type: "delay", name: "Guitar Lab Delay", enabled: true, params: { wet: effects.delayWet, delayTime: "8n", feedback: 0.25 } } : undefined,
-    effects?.drive ? { id: "guitar-lab-drive", type: "distortion", name: "Guitar Lab Drive", enabled: true, params: { wet: Math.min(1, effects.drive), distortion: effects.drive } } : undefined,
+    effects?.drive ? { id: "guitar-lab-drive", type: "distortion", name: "Guitar Lab Drive", enabled: true, params: { drive: effects.drive, wet: effects.driveMix ?? 0.75, tone: effects.driveTone ?? 5000, output: effects.driveOutput ?? 1 } } : undefined,
     effects?.chorusWet ? { id: "guitar-lab-chorus", type: "chorus", name: "Guitar Lab Chorus", enabled: true, params: { wet: effects.chorusWet } } : undefined
   ].filter(Boolean) as TrackEffect[];
   try {

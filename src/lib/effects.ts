@@ -50,7 +50,12 @@ export function createToneEffectNodes(effects: TrackEffect[] = []): Tone.ToneAud
         nodes.push(new Tone.Distortion({ distortion: drive * 0.8, wet: num(effect.params.wet, 0.5, 0, 1) }));
         nodes.push(new Tone.Filter({ type: "lowpass", frequency: num(effect.params.tone, 2200, 100, 8000) }));
       } else if (effect.type === "distortion") {
-        nodes.push(new Tone.Distortion({ distortion: num(effect.params.amount, 0.25, 0, 1), wet: num(effect.params.wet, 0.5, 0, 1) }));
+        const uiDrive = num(effect.params.drive, num(effect.params.amount, 0.25, 0, 5), 0, 5);
+        const distortion = num(effect.params.distortion, Math.min(0.95, 1 - Math.exp(-uiDrive * 0.7)), 0, 0.95);
+        nodes.push(new Tone.Distortion({ distortion, wet: num(effect.params.wet, 0.5, 0, 1) }));
+        const tone = effect.params.tone;
+        if (typeof tone === "number") nodes.push(new Tone.Filter({ type: "lowpass", frequency: num(tone, 5000, 100, 10000) }));
+        nodes.push(new Tone.Gain(num(effect.params.output, 1, 0, 1.5)));
       } else if (effect.type === "compressor") {
         nodes.push(new Tone.Compressor({ threshold: num(effect.params.threshold, -24, -60, 0), ratio: num(effect.params.ratio, 4, 1, 20), attack: num(effect.params.attack, 0.01, 0.001, 0.5), release: num(effect.params.release, 0.2, 0.01, 2) }));
         const makeupGain = num(effect.params.makeupGain, 0, 0, 24);
