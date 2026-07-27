@@ -15,6 +15,54 @@ Open the local address printed by Next.js. For a production/type check, run:
 npm run build
 ```
 
+## Docker
+
+Build the production Next.js standalone image and start it in the background:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://SERVER_IP:3000`, replacing `SERVER_IP` with the Docker host's address.
+The Compose configuration bind-mounts persistent user samples from
+`/opt/BeatMakerSamples` on the host, with this expected structure:
+
+```text
+/opt/BeatMakerSamples/
+├── oneshots/
+└── loops/
+```
+
+At container startup, `docker/entrypoint.sh` creates both folders when needed. If
+an individual `oneshots` or `loops` folder is empty, it copies that category from
+`default-samples`. A non-empty folder is left untouched, and copy operations do
+not overwrite existing files. The mounted host directory survives container
+restarts and image rebuilds.
+
+This repository currently provides placeholder `.gitkeep` files rather than
+audio. Put factory-owned or redistributable files in `default-samples/oneshots`
+and `default-samples/loops` to bundle them into future images. **Never add
+copyrighted samples unless we own them or have redistribution rights.**
+
+To reset one category to the bundled factory set, stop the container, clear the
+corresponding `/opt/BeatMakerSamples/oneshots` or
+`/opt/BeatMakerSamples/loops` folder, then start the container again. To update
+the deployment after pulling repository changes:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+To add personal samples, copy supported audio files into the appropriate host
+folder, for example:
+
+```bash
+cp myloop.wav /opt/BeatMakerSamples/loops/
+```
+
+Restart or rebuild the container as needed; existing user files will remain.
+
 ## Themes and skins
 
 The Skin selector includes the existing built-in themes, a readable **Modern Retro 2000s** theme, and three CSS-only themes inspired by classic Windows UI eras:

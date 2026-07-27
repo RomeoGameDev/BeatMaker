@@ -1,0 +1,9 @@
+services:
+  workstation-music:
+    build: .
+    container_name: workstation-music
+    ports:
+      - "3000:3000"
+    volumes:
+      - /opt/BeatMakerSamples:/app/public/samples
+    restart: unless-stopped
