@@ -46,10 +46,10 @@ never overwritten or deleted, so user samples remain unchanged across container
 restarts and image rebuilds. `.gitkeep` files are not copied, and empty default
 sample directories are supported.
 
-This repository currently provides placeholder `.gitkeep` files rather than
-audio. Put factory-owned or redistributable files in `default-samples/oneshots`
-and `default-samples/loops` to bundle them into future images. **Never add
-copyrighted samples unless we own them or have redistribution rights.**
+This repository includes bundled WAV files in `default-samples/oneshots` and
+`default-samples/loops`. Add only factory-owned or redistributable files to
+these directories for future images. **Never add copyrighted samples unless we
+own them or have redistribution rights.**
 
 To migrate samples from an older non-Docker installation without overwriting
 anything already in the Docker sample volume, run:

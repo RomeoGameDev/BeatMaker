@@ -72,4 +72,6 @@ function discoverSamples(directory = SAMPLE_ROOT, discoveredSamples: Sample[] = 
   return discoveredSamples;
 }
 
-export const samples: Sample[] = discoverSamples().sort((first, second) => first.path.localeCompare(second.path));
+export function getSamples(): Sample[] {
+  return discoverSamples().sort((first, second) => first.path.localeCompare(second.path));
+}
