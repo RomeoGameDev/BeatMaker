@@ -33,21 +33,35 @@ The Compose configuration bind-mounts persistent user samples from
 └── loops/
 ```
 
-At container startup, `docker/entrypoint.sh` creates both folders when needed. If
-an individual `oneshots` or `loops` folder is empty, it copies that category from
-`default-samples`. A non-empty folder is left untouched, and copy operations do
-not overwrite existing files. The mounted host directory survives container
-restarts and image rebuilds.
+Docker runtime samples live in `/opt/BeatMakerSamples` on the host and are served
+from `/app/public/samples` in the container. Because that host directory is
+bind-mounted over `/app/public/samples`, any samples in the repository's
+`public/samples` directory are hidden while Docker is running.
+
+The `default-samples/oneshots` and `default-samples/loops` directories are
+bundled into the image at `/app/default-samples`. On every container start,
+`docker/entrypoint.sh` ensures both runtime category folders exist and copies
+each missing bundled default sample into the mounted volume. Existing files are
+never overwritten or deleted, so user samples remain unchanged across container
+restarts and image rebuilds. `.gitkeep` files are not copied, and empty default
+sample directories are supported.
 
 This repository currently provides placeholder `.gitkeep` files rather than
 audio. Put factory-owned or redistributable files in `default-samples/oneshots`
 and `default-samples/loops` to bundle them into future images. **Never add
 copyrighted samples unless we own them or have redistribution rights.**
 
-To reset one category to the bundled factory set, stop the container, clear the
-corresponding `/opt/BeatMakerSamples/oneshots` or
-`/opt/BeatMakerSamples/loops` folder, then start the container again. To update
-the deployment after pulling repository changes:
+To migrate samples from an older non-Docker installation without overwriting
+anything already in the Docker sample volume, run:
+
+```bash
+mkdir -p /opt/BeatMakerSamples/oneshots /opt/BeatMakerSamples/loops
+cp -n /opt/BeatMaker/public/samples/oneshots/* /opt/BeatMakerSamples/oneshots/ 2>/dev/null || true
+cp -n /opt/BeatMaker/public/samples/loops/* /opt/BeatMakerSamples/loops/ 2>/dev/null || true
+docker compose restart
+```
+
+To update the deployment after pulling repository changes:
 
 ```bash
 git pull
@@ -61,7 +75,9 @@ folder, for example:
 cp myloop.wav /opt/BeatMakerSamples/loops/
 ```
 
-Restart or rebuild the container as needed; existing user files will remain.
+Restart or rebuild the container as needed; existing user files will remain and
+newly bundled defaults will be added only when their target filenames are
+missing.
 
 ## Themes and skins
 
